@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 class Generator(nn.Module):
 
-    def __init__(self, z_size, vec_size, hidden_units=128, lstm_dim=128, drop_prob=0.6):
+    def __init__(self, z_size, vec_size, hidden_units=128, lstm_dim=350, drop_prob=0.6):
         super(Generator, self).__init__()
 
         # params
@@ -20,15 +20,15 @@ class Generator(nn.Module):
     def forward(z, hidden):
         batch_size = z.shape[0]
         # z: (batch_size, seq_len, z_size)
-        fc_out = self.fc_layer1(z)
-        relu_out = F.leaky_relu(fc_out)
-        lstm_out = self.lstm(relu_out, hidden)
+        out = self.fc_layer1(z)
+        out = F.leaky_relu(out)
+        out = self.lstm(out, hidden)
         # stack outputs before feeding to fully-connected
-        lstm_out = lstm_out.contiguous().view(-1, self.lstm_dim)
-        drop_out = self.dropout(lstm_out)
-        fc_out = self.fc_layer(drop_out)
-        # fc_out: (batch_size * seq_len, vec_size)
-        notes = fc_out.view(batch_size, -1, self.vec_size)
+        out = out.contiguous().view(-1, self.lstm_dim)
+        out = self.dropout(out)
+        out = self.fc_layer(out)
+        # (batch_size * seq_len, vec_size)
+        notes = out.view(batch_size, -1, self.vec_size)
 
         return notes, hidden
 
@@ -49,9 +49,10 @@ class Generator(nn.Module):
         
         return hidden
 
+
 class Discriminator(nn.Module):
 
-    def __init__(self, vec_size, seq_len, lstm_dim=128, drop_prob=0.6):
+    def __init__(self, vec_size, seq_len, lstm_dim=350, drop_prob=0.6):
 
         super(Discriminator, self).__init__()
 
