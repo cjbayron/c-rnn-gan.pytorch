@@ -4,11 +4,11 @@ import torch.nn.functional as F
 
 class Generator(nn.Module):
 
-    def __init__(self, z_size, vec_size, hidden_units=128, lstm_dim=350, drop_prob=0.6):
+    def __init__(self, z_size, vec_size, hidden_units=128, lstm_dim=256, lstm_layers=2, drop_prob=0.6):
         super(Generator, self).__init__()
 
         # params
-        self.num_layers = 2
+        self.num_layers = lstm_layers
         self.vec_size = vec_size
 
         self.fc_layer1 = nn.Linear(in_features=z_size, out_features=hidden_units)
@@ -52,20 +52,20 @@ class Generator(nn.Module):
 
 class Discriminator(nn.Module):
 
-    def __init__(self, vec_size, seq_len, lstm_dim=350, drop_prob=0.6):
+    def __init__(self, vec_size, seq_len, lstm_dim=256, lstm_layers=2, drop_prob=0.6):
 
         super(Discriminator, self).__init__()
 
         # params
-        self.num_layers = 2
+        self.num_layers = lstm_layers
         self.bidirectional = True
         self.seq_len = seq_len
         self.lstm_dim = lstm_dim
 
+        # NOTE: original implementation uses dropout on input
         self.lstm = nn.LSTM(input_size=vec_size, hidden_size=lstm_dim,
                             num_layers=self.num_layers, batch_first=True, dropout=drop_prob,
                             bidirectional=self.bidirectional)
-        self.dropout = nn.Dropout(drop_prob)
         self.fc_layer = nn.Linear(in_features=lstm_dim, out_features=1)
 
     def forward(note_seq, hidden):
@@ -88,8 +88,7 @@ class Discriminator(nn.Module):
 
         # stack outputs before feeding to fully-connected
         lstm_out = lstm_out.contiguous().view(-1, self.lstm_dim)
-        drop_out = self.dropout(lstm_out)
-        fc_out = self.fc_layer(drop_out)
+        fc_out = self.fc_layer(lstm_out)
         sig_out = torch.sigmoid(fc_out)
         # sig_out: (batch_size, 1)
 
