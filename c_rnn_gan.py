@@ -4,33 +4,43 @@ import torch.nn.functional as F
 
 class Generator(nn.Module):
 
-    def __init__(self, z_size, vec_size, hidden_units=128, lstm_dim=256, lstm_layers=2, drop_prob=0.6):
+    def __init__(self, num_feats, hidden_units=128, lstm_dim=256, drop_prob=0.6):
         super(Generator, self).__init__()
 
         # params
-        self.num_layers = lstm_layers
-        self.vec_size = vec_size
+        self.fc_layer1 = nn.Linear(in_features=(z_size*2), out_features=hidden_units)
+        self.lstm_cell1 = nn.LSTMCell(input_size=hidden_units, hidden_size=lstm_dim)
+        self.dropout = nn.Dropout(p=drop_prob)
+        self.lstm_cell2 = nn.LSTMCell(input_size=lstm_dim, hidden_size=lstm_dim)
+        self.fc_layer2 = nn.Linear(in_features=lstm_dim, out_features=num_feats)
 
-        self.fc_layer1 = nn.Linear(in_features=z_size, out_features=hidden_units)
-        self.lstm = nn.LSTM(input_size=hidden_units, hidden_size=lstm_dim,
-                            num_layers=self.num_layers, batch_first=True, dropout=drop_prob)
-        self.dropout = nn.Dropout(drop_prob)
-        self.fc_layer2 = nn.Linear(in_features=lstm_dim, out_features=vec_size)
-
-    def forward(z, hidden):
-        batch_size = z.shape[0]
+    def forward(z, states):
         # z: (batch_size, seq_len, z_size)
-        out = self.fc_layer1(z)
-        out = F.leaky_relu(out)
-        out = self.lstm(out, hidden)
-        # stack outputs before feeding to fully-connected
-        out = out.contiguous().view(-1, self.lstm_dim)
-        out = self.dropout(out)
-        out = self.fc_layer(out)
-        # (batch_size * seq_len, vec_size)
-        notes = out.view(batch_size, -1, self.vec_size)
+        # z here is the uniformly random vector
+        batch_size, seq_len, z_size = z.shape
 
-        return notes, hidden
+        # split to seq_len * (batch_size * z_size)
+        z = torch.split(z, 1, dim=1)
+        z = [z_step.squeeze() for z_step in z]
+
+        # create dummy-previous-output for first timestep
+        prev_gen = torch.empty([batch_size, z_size]).uniform_()
+
+        # manually process each timestep
+        state1, state2 = states
+        gen_feats = []
+        for z_step in z:
+            # concatenate current input features and previous timestep output features
+            concat_in = torch.cat((z_step, prev_gen), dim=-1)
+            out = F.relu(self.fc_layer1(concat_in))
+            out, state1 = self.lstm_cell1(out, state1)
+            out = self.dropout(out) # feature dropout only (no recurrent dropout)
+            out, state2 = self.lstm_cell2(out, state2)
+            prev_gen = self.fc_layer2(out)
+            gen_feats.append(prev_gen)
+
+        states = (state1, state2)
+        return gen_feats, states
 
     def init_hidden(self, batch_size, train_on_gpu=False):
         ''' Initialize hidden state '''
