@@ -44,7 +44,7 @@ class DLoss(nn.Module):
 
 
 def control_grad(model, freeze=True):
-    ''' Freeze/unfreeze optimization
+    ''' Freeze/unfreeze optimization of model
     '''
     if freeze:
         for param in model.parameters():
@@ -55,108 +55,127 @@ def control_grad(model, freeze=True):
             param.requires_grad = True 
 
 
-def run_epoch(mode='train'):
+def check_loss(model, loss):
+    ''' Check loss and control gradients if necessary
+    '''
+    control_grad(model['g'], freeze=False)
+    control_grad(model['d'], freeze=False)  
+
+    if loss['d'] == 0.0 and loss['g'] == 0.0:
+        print('Both G and D train loss are zero. Exiting.')
+        return False
+    elif loss['d'] == 0.0: # freeze D
+        control_grad(model['d'], freeze=True)
+    elif loss['g'] == 0.0: # freeze G
+        control_grad(model['g'], freeze=True)
+    elif loss['g'] < 2.0 or loss['d'] < 2.0:
+        control_grad(model['d'], freeze=True)
+        if loss['g']*0.7 > loss['d']:
+            control_grad(model['g'], freeze=True)
+
+    return True
+
+
+def run_epoch(model, optimizer, criterion, dataloader, mode='train'):
     ''' Run single epoch
     '''
-    g_loss, d_loss = 10.0, 10.0
-    loader.rewind(part=mode)
+    loss = {
+        'g': 10.0,
+        'd': 10.0
+    }
 
-    _, batch_song = loader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
+    num_feats = dataloader.get_num_song_features()
+    dataloader.rewind(part=mode)
+    batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
     while batch_meta is not None and batch_song is not None:
-        control_grad(g_model, freeze=False)
-        control_grad(d_model, freeze=False)
 
         # loss checking
         if mode == 'train':
-            if d_loss == 0.0 and g_loss == 0.0:
-                print('Both G and D train loss are zero. Exiting.')
+            if not check_loss(model, loss):
                 break
-            elif d_loss == 0.0: # freeze D
-                control_grad(d_model, freeze=True)
-            elif g_loss == 0.0: # freeze G
-                control_grad(g_model, freeze=True)
-            elif g_loss < 2.0 or d_loss < 2.0:
-                control_grad(d_model, freeze=True)
-                if g_loss*0.7 > d_loss:
-                    control_grad(g_model, freeze=True)
 
-        # NOTE handling of states!
+        # get initial states
+        g_states = model['g'].init_hidden(BATCH_SIZE)
+        d_state = model['d'].init_hidden(BATCH_SIZE)
 
-        
-        # feed real and generated data to discriminator
+        # Creating new variables for the hidden state, otherwise
+        # we'd backprop through the entire training history
+        # h = tuple([each.data for each in h])
+
+        #### GENERATOR ####
+        optimizer['g'].zero_grad()
+        # prepare inputs
+        z = torch.empty([BATCH_SIZE, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
         batch_song = torch.Tensor(batch_song)
-        d_logits_real, d_feats_real, d_state = d_model(batch_song, d_state)
-        
-        d_logits_gen, d_feats_gen, d_state = d_model(g_feats.detach(), d_state)
 
+        # feed inputs to generator
+        g_feats, g_states = model['g'](z, g_states)
+        # feed real and generated input to discriminator
+        _, d_feats_real, _ = model['d'](batch_song, d_state)
+        _, d_feats_gen, _ = model['d'](g_feats, d_state)
+        # calculate loss, backprop, and update weights of G
+        loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
+        loss['g'].backward()
+        nn.utils.clip_grad_norm_(model['g'].parameters(), max_norm=MAX_GRAD_NORM)
+        optimizer['g'].step()
+
+        #### DISCRIMINATOR ####
+        optimizer['d'].zero_grad()
+        # feed real and generated input to discriminator
+        d_logits_real, _, _ = model['d'](batch_song, d_state)
+        # need to detach from operation history to prevent backpropagating to generator
+        d_logits_gen, _, _ = model['d'](g_feats.detach(), d_state)
+        # calculate loss, backprop, and update weights of D
+        loss['d'] = criterion['d'](d_logits_real, d_logits_gen)
+        loss['d'].backward()
+        nn.utils.clip_grad_norm_(model['d'].parameters(), max_norm=MAX_GRAD_NORM)
+        optimizer['d'].step()
 
         # fetch next batch
-        _, batch_song = loader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
-                
+        batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
 
+        import sys
+        sys.exit()
+                
 
 def train():
     ''' Training sequence
     '''
-    loader = music_data_utils.MusicDataLoader(DATADIR, single_composer=COMPOSER)
-    num_feats = loader.get_num_song_features()
-
-    import sys
-    sys.exit()
+    dataloader = music_data_utils.MusicDataLoader(DATADIR, single_composer=COMPOSER)
+    num_feats = dataloader.get_num_song_features()
 
     # First checking if GPU is available
-    train_on_gpu=torch.cuda.is_available()
+    train_on_gpu = torch.cuda.is_available()
     if(train_on_gpu):
         print('Training on GPU.')
     else:
         print('No GPU available, training on CPU.')
 
-    g_model = Generator(num_feats)
-    d_model = Discriminator(num_feats)
+    model = {
+        'g': Generator(num_feats, use_cuda=train_on_gpu),
+        'd': Discriminator(num_feats, use_cuda=train_on_gpu)
+    }
 
-    g_optimizer = optim.SGD(g_model.parameters(), LRN_RATE, weight_decay=1.0)
-    d_optimizer = optim.SGD(d_model.parameters(), LRN_RATE*D_LRN_FACTOR, weight_decay=1.0)
+    optimizer = {
+        'g': optim.SGD(model['g'].parameters(), LRN_RATE, weight_decay=1.0),
+        'd': optim.SGD(model['d'].parameters(), LRN_RATE*D_LRN_FACTOR, weight_decay=1.0)
+    }
 
-    g_criterion = nn.MSELoss() # feature matching
-    d_criterion = DLoss()
+    criterion = {
+        'g': nn.MSELoss(), # feature matching
+        'd': DLoss()
+    }
 
     if(train_on_gpu):
-        g_model.cuda()
-        d_model.cuda()
+        model['g'].cuda()
+        model['d'].cuda()
 
     for ep in range(MAX_EPOCHS):
-        lr_decay = LRN_DECAY ** max(ep - EPOCHS_BEFORE_DECAY, 0.0)
-
-        #### GENERATOR ####
-        g_optimizer.zero_grad()
-        # generate random vector
-        z = torch.empty([BATCH_SIZE, MAX_SEQ_LEN, num_feats]).uniform_()
-        # feed inputs to generator
-        g_feats, g_states = g_model(z, g_states)
-        # feed real and generated input to discriminator
-        _, d_feats_real, d_state = d_model(batch_song, d_state)
-        _, d_feats_gen, d_state = d_model(g_feats, d_state)
-        # calculate loss, backprop, and update weights of G
-        g_loss = g_criterion(d_feats_real, d_feats_gen)
-        g_loss.backward()
-        nn.utils.clip_grad_norm(g_model.parameters(), max_norm=MAX_GRAD_NORM)
-        g_optimizer.step()
-
-        #### DISCRIMINATOR ####
-        d_optimizer.zero_grad()
-        # feed real and generated input to discriminator
-        d_logits_real, _, d_state = d_model(batch_song, d_state)
-        # need to detach from operation history to prevent backpropagating to generator
-        d_logits_gen, _, d_state = d_model(g_feats.detach(), d_state)
-        # calculate loss, backprop, and update weights of D
-        d_loss = d_criterion(d_logits_real, d_logits_gen)
-        d_loss.backward()
-        nn.utils.clip_grad_norm(d_model.parameters(), max_norm=MAX_GRAD_NORM)
-        d_optimizer.step()
+        run_epoch(model, optimizer, criterion, dataloader, mode='train')
 
         # validation
-        g_model.eval()
-        d_model.eval()
+        # g_model.eval()
+        # model['d'].eval()
 
 
 

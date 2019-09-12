@@ -4,17 +4,22 @@ import torch.nn.functional as F
 
 class Generator(nn.Module):
 
-    def __init__(self, num_feats, hidden_units=128, lstm_dim=256, drop_prob=0.6):
+    def __init__(self, num_feats, hidden_units=128, lstm_dim=256, drop_prob=0.6, use_cuda=False):
         super(Generator, self).__init__()
 
         # params
+        self.hidden_dim = lstm_dim
+        self.use_cuda = use_cuda
+
         self.fc_layer1 = nn.Linear(in_features=(num_feats*2), out_features=hidden_units)
         self.lstm_cell1 = nn.LSTMCell(input_size=hidden_units, hidden_size=lstm_dim)
         self.dropout = nn.Dropout(p=drop_prob)
         self.lstm_cell2 = nn.LSTMCell(input_size=lstm_dim, hidden_size=lstm_dim)
         self.fc_layer2 = nn.Linear(in_features=lstm_dim, out_features=num_feats)
 
-    def forward(z, states):
+    def forward(self, z, states):
+        if self.use_cuda:
+            z = z.cuda()
         # z: (batch_size, seq_len, num_feats)
         # z here is the uniformly random vector
         batch_size, seq_len, num_feats = z.shape
@@ -25,19 +30,24 @@ class Generator(nn.Module):
 
         # create dummy-previous-output for first timestep
         prev_gen = torch.empty([batch_size, num_feats]).uniform_()
+        if self.use_cuda:
+            prev_gen = prev_gen.cuda()
 
         # manually process each timestep
-        state1, state2 = states
+        state1, state2 = states # (h1, c1), (h2, c2)
         gen_feats = []
         for z_step in z:
             # concatenate current input features and previous timestep output features
             concat_in = torch.cat((z_step, prev_gen), dim=-1)
             out = F.relu(self.fc_layer1(concat_in))
-            out, state1 = self.lstm_cell1(out, state1)
-            out = self.dropout(out) # feature dropout only (no recurrent dropout)
-            out, state2 = self.lstm_cell2(out, state2)
-            prev_gen = self.fc_layer2(out)
+            h1, c1 = self.lstm_cell1(out, state1)
+            h1 = self.dropout(h1) # feature dropout only (no recurrent dropout)
+            h2, c2 = self.lstm_cell2(h1, state2)
+            prev_gen = self.fc_layer2(h2)
             gen_feats.append(prev_gen)
+
+            state1 = (h1, c1)
+            state2 = (h2, c2)
 
         # seq_len * (batch_size * num_feats) -> (batch_size * seq_len * num_feats)
         gen_feats = torch.stack(gen_feats, dim=1)
@@ -45,42 +55,50 @@ class Generator(nn.Module):
         states = (state1, state2)
         return gen_feats, states
 
-    def init_hidden(self, batch_size, train_on_gpu=False):
+    def init_hidden(self, batch_size):
         ''' Initialize hidden state '''
+        # create NEW tensor with SAME TYPE as weight
         weight = next(self.parameters()).data
         
-        if (train_on_gpu):
-            hidden = (weight.new(self.num_layers, batch_size,
-                                 self.hidden_dim).zero_().cuda(),
-                      weight.new(self.num_layers, batch_size,
-                                 self.hidden_dim).zero_().cuda())
+        if (self.use_cuda):
+            hidden = ((weight.new(batch_size, self.hidden_dim).zero_().cuda(),
+                       weight.new(batch_size, self.hidden_dim).zero_().cuda()),
+                      (weight.new(batch_size, self.hidden_dim).zero_().cuda(),
+                       weight.new(batch_size, self.hidden_dim).zero_().cuda()))
         else:
-            hidden = (weight.new(self.num_layers, batch_size,
-                                 self.hidden_dim).zero_(),
-                      weight.new(self.num_layers, batch_size,
-                                 self.hidden_dim).zero_())
+            hidden = ((weight.new(batch_size, self.hidden_dim).zero_(),
+                       weight.new(batch_size, self.hidden_dim).zero_()),
+                      (weight.new(batch_size, self.hidden_dim).zero_(),
+                       weight.new(batch_size, self.hidden_dim).zero_()))
         
         return hidden
 
 
 class Discriminator(nn.Module):
 
-    def __init__(self, num_feats, lstm_dim=256, drop_prob=0.6):
+    def __init__(self, num_feats, lstm_dim=256, drop_prob=0.6, use_cuda=False):
 
         super(Discriminator, self).__init__()
 
         # params
+        self.hidden_dim = lstm_dim
+        self.num_layers = 2
+        self.use_cuda = use_cuda
+
         self.dropout = nn.Dropout(p=drop_prob)
         self.lstm = nn.LSTM(input_size=num_feats, hidden_size=lstm_dim,
-                            num_layers=2, batch_first=True, dropout=drop_prob,
+                            num_layers=self.num_layers, batch_first=True, dropout=drop_prob,
                             bidirectional=True)
         self.fc_layer = nn.Linear(in_features=(2*lstm_dim), out_features=1)
 
-    def forward(note_seq, state):
+    def forward(self, note_seq, state):
+        if self.use_cuda:
+            note_seq = note_seq.cuda()
+
         # note_seq: (batch_size, seq_len, num_feats)
         drop_in = self.dropout(note_seq) # input with dropout
         # (batch_size, seq_len, num_directions*hidden_size)
-        lstm_out = self.lstm(drop_in, state)
+        lstm_out, state = self.lstm(drop_in, state)
         # (batch_size, seq_len, 1)
         out = self.fc_layer(lstm_out)
         out = torch.sigmoid(out)
@@ -92,14 +110,14 @@ class Discriminator(nn.Module):
 
         return out, lstm_out, state
 
-    def init_hidden(self, batch_size, train_on_gpu=False):
+    def init_hidden(self, batch_size):
         ''' Initialize hidden state '''
+        # create NEW tensor with SAME TYPE as weight
         weight = next(self.parameters()).data
-        layer_mult = 1
-        if self.bidirectional:
-            layer_mult *= 2 
+
+        layer_mult = 2 # for being bidirectional
         
-        if (train_on_gpu):
+        if self.use_cuda:
             hidden = (weight.new(self.num_layers * layer_mult, batch_size,
                                  self.hidden_dim).zero_().cuda(),
                       weight.new(self.num_layers * layer_mult, batch_size,
