@@ -87,16 +87,17 @@ def run_epoch(model, optimizer, criterion, dataloader, mode='train'):
     num_feats = dataloader.get_num_song_features()
     dataloader.rewind(part=mode)
     batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
+
+    # get initial states
+    g_states = model['g'].init_hidden(BATCH_SIZE)
+    d_state = model['d'].init_hidden(BATCH_SIZE)
+
     while batch_meta is not None and batch_song is not None:
 
         # loss checking
         if mode == 'train':
             if not check_loss(model, loss):
                 break
-
-        # get initial states
-        g_states = model['g'].init_hidden(BATCH_SIZE)
-        d_state = model['d'].init_hidden(BATCH_SIZE)
 
         # Creating new variables for the hidden state, otherwise
         # we'd backprop through the entire training history
@@ -143,6 +144,15 @@ def train():
     '''
     dataloader = music_data_utils.MusicDataLoader(DATADIR, single_composer=COMPOSER)
     num_feats = dataloader.get_num_song_features()
+    for i in range(3):
+        batch_meta, batch_song, batch_names = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
+        print("Batch %d" % i, batch_names)
+
+
+
+    import sys
+    sys.exit()
+
 
     # First checking if GPU is available
     train_on_gpu = torch.cuda.is_available()
