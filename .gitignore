@@ -102,3 +102,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# c-rnn-gan.pytorch
+old/
+data/

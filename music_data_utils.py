@@ -60,9 +60,6 @@ file_list['validation'] = [
 'classical/mozart/mozk175b.mid', \
 'classical/mozart/mozk488a.mid', \
 'classical/mozart/mozk218c.mid', \
-]
-
-file_list['test'] = [
 'classical/mozart/245div1.mid', \
 'classical/mozart/mozk333a.mid', \
 'classical/mozart/mozk299a.mid', \
@@ -70,6 +67,8 @@ file_list['test'] = [
 'classical/mozart/2344serenadeinbb.mid', \
 'classical/mozart/495p141ck.mid'
 ]
+
+file_list['test'] = []
 
 
 class MusicDataLoader(object):
@@ -156,7 +155,7 @@ class MusicDataLoader(object):
             elif os.path.join(os.path.join(genre, composer), f) in file_list['test']:
               self.songs['test'].append([genre, composer, song_data])
             else:
-              self.songs['train'].append([genre, composer, song_data, f])
+              self.songs['train'].append([genre, composer, song_data])
 
     random.shuffle(self.songs['train'])
     self.pointer['validation'] = 0
@@ -322,7 +321,10 @@ class MusicDataLoader(object):
     """
     #print (('get_batch(): pointer: {}, len: {}, batchsize: {}'.format(self.pointer[part], len(self.songs[part]), batchsize))
     if self.pointer[part] > len(self.songs[part])-batchsize:
-      return None, None
+      batchsize = len(self.songs[part]) - self.pointer[part]
+      if batchsize == 0:
+      	return None, None
+
     if self.songs[part]:
       batch = self.songs[part][self.pointer[part]:self.pointer[part]+batchsize]
       self.pointer[part] += batchsize
@@ -332,7 +334,6 @@ class MusicDataLoader(object):
       num_song_features = NUM_FEATURES_PER_TONE*self.tones_per_cell+1
       batch_genrecomposer = np.ndarray(shape=[batchsize, num_meta_features])
       batch_songs = np.ndarray(shape=[batchsize, songlength, num_song_features])
-      batch_names = []
 
       #print ( 'batch shape: {}'.format(batch_songs.shape)
       zeroframe = np.zeros(shape=[num_song_features])
@@ -341,7 +342,6 @@ class MusicDataLoader(object):
         composeronehot = onehot(self.composers.index(batch[s][1]), len(self.composers))
         genreonehot = onehot(self.genres.index(batch[s][0]), len(self.genres))
         genrecomposer = np.concatenate([genreonehot, composeronehot])
-        batch_names.append(batch[s][-1])
         
         #random position:
         begin = 0
@@ -387,7 +387,7 @@ class MusicDataLoader(object):
       #batched_sequence = np.split(batch_songs, indices_or_sections=songlength, axis=1)
       #return [np.squeeze(s, axis=1) for s in batched_sequence]
       #print (('batch returns [0:10]: {}'.format(batch_songs[0,0:10,:]))
-      return batch_genrecomposer, batch_songs, batch_names
+      return batch_genrecomposer, batch_songs
     else:
       raise 'get_batch() called but self.songs is not initialized.'
   

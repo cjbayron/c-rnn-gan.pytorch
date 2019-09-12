@@ -8,18 +8,23 @@ from c_rnn_gan import Generator, Discriminator
 import music_data_utils
 from midi_statistics import get_all_stats
 
-DATADIR = 'data'
-TRAINDIR = 'traindump'
+DATA_DIR = 'data'
+CKPT_DIR = 'models'
+G_FN = 'c_rnn_gan_g.pth'
+D_FN = 'c_rnn_gan_d.pth'
+
 LRN_RATE = 0.1
 D_LRN_FACTOR = 0.5
 LRN_DECAY = 1.0
 EPOCHS_BEFORE_DECAY = 60
 MAX_GRAD_NORM = 5.0
-BATCH_SIZE = 16
+BATCH_SIZE = 32
 MAX_EPOCHS = 500
 
 COMPOSER = 'mozart'
-MAX_SEQ_LEN = 100
+MAX_SEQ_LEN = 200
+
+PERFORM_LOSS_CHECKING = False
 
 class DLoss(nn.Module):
     ''' C-RNN-GAN discriminator loss
@@ -76,7 +81,7 @@ def check_loss(model, loss):
     return True
 
 
-def run_epoch(model, optimizer, criterion, dataloader, mode='train'):
+def run_training(model, optimizer, criterion, dataloader):
     ''' Run single epoch
     '''
     loss = {
@@ -85,32 +90,40 @@ def run_epoch(model, optimizer, criterion, dataloader, mode='train'):
     }
 
     num_feats = dataloader.get_num_song_features()
-    dataloader.rewind(part=mode)
-    batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
+    dataloader.rewind(part='train')
+    batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
 
-    # get initial states
-    g_states = model['g'].init_hidden(BATCH_SIZE)
-    d_state = model['d'].init_hidden(BATCH_SIZE)
+    model['g'].train()
+    model['d'].train()
+
+    g_loss_total = 0.0
+    d_loss_total = 0.0
+    num_sample = 0
 
     while batch_meta is not None and batch_song is not None:
 
+        real_batch_sz = batch_song.shape[0]
+
         # loss checking
-        if mode == 'train':
+        if PERFORM_LOSS_CHECKING == True:
             if not check_loss(model, loss):
                 break
 
-        # Creating new variables for the hidden state, otherwise
-        # we'd backprop through the entire training history
-        # h = tuple([each.data for each in h])
+        # get initial states
+        # each batch is independent i.e. not a continuation of previous batch
+        # so we reset states for each batch
+        # POSSIBLE IMPROVEMENT: next batch is continuation of previous batch
+        g_states = model['g'].init_hidden(real_batch_sz)
+        d_state = model['d'].init_hidden(real_batch_sz)
 
         #### GENERATOR ####
         optimizer['g'].zero_grad()
         # prepare inputs
-        z = torch.empty([BATCH_SIZE, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
+        z = torch.empty([real_batch_sz, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
         batch_song = torch.Tensor(batch_song)
 
         # feed inputs to generator
-        g_feats, g_states = model['g'](z, g_states)
+        g_feats, _ = model['g'](z, g_states)
         # feed real and generated input to discriminator
         _, d_feats_real, _ = model['d'](batch_song, d_state)
         _, d_feats_gen, _ = model['d'](g_feats, d_state)
@@ -132,27 +145,77 @@ def run_epoch(model, optimizer, criterion, dataloader, mode='train'):
         nn.utils.clip_grad_norm_(model['d'].parameters(), max_norm=MAX_GRAD_NORM)
         optimizer['d'].step()
 
+        g_loss_total += loss['g'].item()
+        d_loss_total += loss['d'].item()
+        num_sample += real_batch_sz
+
         # fetch next batch
-        batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part=mode)
+        batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
 
-        import sys
-        sys.exit()
-                
+    g_loss_avg, d_loss_avg = 0.0, 0.0
+    if num_sample > 0:
+        g_loss_avg = g_loss_total / num_sample
+        d_loss_avg = d_loss_total / num_sample
 
-def train():
+    return model, g_loss_avg, d_loss_avg
+
+
+def run_validation(model, criterion, dataloader):
+    '''
+    '''
+    num_feats = dataloader.get_num_song_features()
+    dataloader.rewind(part='validation')
+    batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='validation')
+
+    model['g'].eval()
+    model['d'].eval()
+
+    g_loss_total = 0.0
+    d_loss_total = 0.0
+    num_sample = 0
+
+    while batch_meta is not None and batch_song is not None:
+
+        real_batch_sz = batch_song.shape[0]
+
+        # initial states
+        g_states = model['g'].init_hidden(real_batch_sz)
+        d_state = model['d'].init_hidden(real_batch_sz)
+
+        #### GENERATOR ####
+        # prepare inputs
+        z = torch.empty([real_batch_sz, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
+        batch_song = torch.Tensor(batch_song)
+
+        # feed inputs to generator
+        g_feats, _ = model['g'](z, g_states)
+        # feed real and generated input to discriminator
+        d_logits_real, d_feats_real, _ = model['d'](batch_song, d_state)
+        d_logits_gen, d_feats_gen, _ = model['d'](g_feats, d_state)
+        # calculate loss
+        g_loss = criterion['g'](d_feats_real, d_feats_gen)
+        d_loss = criterion['d'](d_logits_real, d_logits_gen)
+
+        g_loss_total += g_loss.item()
+        d_loss_total += d_loss.item()
+        num_sample += real_batch_sz
+
+        # fetch next batch
+        batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='validation')
+
+    g_loss_avg, d_loss_avg = 0.0, 0.0
+    if num_sample > 0:
+        g_loss_avg = g_loss_total / num_sample
+        d_loss_avg = d_loss_total / num_sample
+
+    return g_loss_avg, d_loss_avg
+
+
+def main():
     ''' Training sequence
     '''
-    dataloader = music_data_utils.MusicDataLoader(DATADIR, single_composer=COMPOSER)
+    dataloader = music_data_utils.MusicDataLoader(DATA_DIR, single_composer=COMPOSER)
     num_feats = dataloader.get_num_song_features()
-    for i in range(3):
-        batch_meta, batch_song, batch_names = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
-        print("Batch %d" % i, batch_names)
-
-
-
-    import sys
-    sys.exit()
-
 
     # First checking if GPU is available
     train_on_gpu = torch.cuda.is_available()
@@ -180,14 +243,17 @@ def train():
         model['g'].cuda()
         model['d'].cuda()
 
-    for ep in range(MAX_EPOCHS):
-        run_epoch(model, optimizer, criterion, dataloader, mode='train')
+    for ep in range(10):
+        model, trn_g_loss, trn_d_loss = run_training(model, optimizer, criterion, dataloader)
+        val_g_loss, val_d_loss = run_validation(model, criterion, dataloader)
 
-        # validation
-        # g_model.eval()
-        # model['d'].eval()
+        print("Epoch %d/%d [Training Loss] G: %0.8f, D: %0.8f "
+              "[Validation Loss] G: %0.8f, D: %0.8f" %
+              (ep+1, MAX_EPOCHS, trn_g_loss, trn_d_loss, val_g_loss, val_d_loss))
 
+    torch.save(model['g'].state_dict(), os.path.join(CKPT_DIR, G_FN))
+    torch.save(model['d'].state_dict(), os.path.join(CKPT_DIR, D_FN))
 
 
 if __name__ == "__main__":
-    train()
+    main()
