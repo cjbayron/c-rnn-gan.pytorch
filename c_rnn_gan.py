@@ -4,18 +4,18 @@ import torch.nn.functional as F
 
 class Generator(nn.Module):
 
-    def __init__(self, num_feats, hidden_units=128, lstm_dim=256, drop_prob=0.6, use_cuda=False):
+    def __init__(self, num_feats, hidden_units=100, drop_prob=0.5, use_cuda=False):
         super(Generator, self).__init__()
 
         # params
-        self.hidden_dim = lstm_dim
+        self.hidden_dim = hidden_units
         self.use_cuda = use_cuda
 
         self.fc_layer1 = nn.Linear(in_features=(num_feats*2), out_features=hidden_units)
-        self.lstm_cell1 = nn.LSTMCell(input_size=hidden_units, hidden_size=lstm_dim)
+        self.lstm_cell1 = nn.LSTMCell(input_size=hidden_units, hidden_size=hidden_units)
         self.dropout = nn.Dropout(p=drop_prob)
-        self.lstm_cell2 = nn.LSTMCell(input_size=lstm_dim, hidden_size=lstm_dim)
-        self.fc_layer2 = nn.Linear(in_features=lstm_dim, out_features=num_feats)
+        self.lstm_cell2 = nn.LSTMCell(input_size=hidden_units, hidden_size=hidden_units)
+        self.fc_layer2 = nn.Linear(in_features=hidden_units, out_features=num_feats)
 
     def forward(self, z, states):
         if self.use_cuda:
@@ -26,7 +26,7 @@ class Generator(nn.Module):
 
         # split to seq_len * (batch_size * num_feats)
         z = torch.split(z, 1, dim=1)
-        z = [z_step.squeeze() for z_step in z]
+        z = [z_step.squeeze(dim=1) for z_step in z]
 
         # create dummy-previous-output for first timestep
         prev_gen = torch.empty([batch_size, num_feats]).uniform_()
@@ -76,20 +76,20 @@ class Generator(nn.Module):
 
 class Discriminator(nn.Module):
 
-    def __init__(self, num_feats, lstm_dim=256, drop_prob=0.6, use_cuda=False):
+    def __init__(self, num_feats, hidden_units=100, drop_prob=0.5, use_cuda=False):
 
         super(Discriminator, self).__init__()
 
         # params
-        self.hidden_dim = lstm_dim
+        self.hidden_dim = hidden_units
         self.num_layers = 2
         self.use_cuda = use_cuda
 
         self.dropout = nn.Dropout(p=drop_prob)
-        self.lstm = nn.LSTM(input_size=num_feats, hidden_size=lstm_dim,
+        self.lstm = nn.LSTM(input_size=num_feats, hidden_size=hidden_units,
                             num_layers=self.num_layers, batch_first=True, dropout=drop_prob,
                             bidirectional=True)
-        self.fc_layer = nn.Linear(in_features=(2*lstm_dim), out_features=1)
+        self.fc_layer = nn.Linear(in_features=(2*hidden_units), out_features=1)
 
     def forward(self, note_seq, state):
         if self.use_cuda:

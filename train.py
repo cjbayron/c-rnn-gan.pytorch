@@ -1,30 +1,34 @@
 ''' Train C-RNN-GAN
 '''
+import os
+from argparse import ArgumentParser
+
 import torch
 import torch.nn as nn
 from torch import optim
 
 from c_rnn_gan import Generator, Discriminator
 import music_data_utils
-from midi_statistics import get_all_stats
 
 DATA_DIR = 'data'
 CKPT_DIR = 'models'
 G_FN = 'c_rnn_gan_g.pth'
 D_FN = 'c_rnn_gan_d.pth'
 
-LRN_RATE = 0.1
-D_LRN_FACTOR = 0.5
-LRN_DECAY = 1.0
-EPOCHS_BEFORE_DECAY = 60
+G_LRN_RATE = 0.001
+D_LRN_RATE = 0.001
 MAX_GRAD_NORM = 5.0
 BATCH_SIZE = 32
 MAX_EPOCHS = 500
+L2_DECAY = 1.0
 
 COMPOSER = 'mozart'
 MAX_SEQ_LEN = 200
 
 PERFORM_LOSS_CHECKING = False
+FREEZE_G = False
+FREEZE_D = True
+
 
 class DLoss(nn.Module):
     ''' C-RNN-GAN discriminator loss
@@ -117,7 +121,8 @@ def run_training(model, optimizer, criterion, dataloader):
         d_state = model['d'].init_hidden(real_batch_sz)
 
         #### GENERATOR ####
-        optimizer['g'].zero_grad()
+        if not FREEZE_G:
+            optimizer['g'].zero_grad()
         # prepare inputs
         z = torch.empty([real_batch_sz, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
         batch_song = torch.Tensor(batch_song)
@@ -129,21 +134,24 @@ def run_training(model, optimizer, criterion, dataloader):
         _, d_feats_gen, _ = model['d'](g_feats, d_state)
         # calculate loss, backprop, and update weights of G
         loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
-        loss['g'].backward()
-        nn.utils.clip_grad_norm_(model['g'].parameters(), max_norm=MAX_GRAD_NORM)
-        optimizer['g'].step()
+        if not FREEZE_G:
+            loss['g'].backward()
+            nn.utils.clip_grad_norm_(model['g'].parameters(), max_norm=MAX_GRAD_NORM)
+            optimizer['g'].step()
 
         #### DISCRIMINATOR ####
-        optimizer['d'].zero_grad()
+        if not FREEZE_D:
+            optimizer['d'].zero_grad()
         # feed real and generated input to discriminator
         d_logits_real, _, _ = model['d'](batch_song, d_state)
         # need to detach from operation history to prevent backpropagating to generator
         d_logits_gen, _, _ = model['d'](g_feats.detach(), d_state)
         # calculate loss, backprop, and update weights of D
         loss['d'] = criterion['d'](d_logits_real, d_logits_gen)
-        loss['d'].backward()
-        nn.utils.clip_grad_norm_(model['d'].parameters(), max_norm=MAX_GRAD_NORM)
-        optimizer['d'].step()
+        if not FREEZE_D:
+            loss['d'].backward()
+            nn.utils.clip_grad_norm_(model['d'].parameters(), max_norm=MAX_GRAD_NORM)
+            optimizer['d'].step()
 
         g_loss_total += loss['g'].item()
         d_loss_total += loss['d'].item()
@@ -211,7 +219,7 @@ def run_validation(model, criterion, dataloader):
     return g_loss_avg, d_loss_avg
 
 
-def main():
+def main(args):
     ''' Training sequence
     '''
     dataloader = music_data_utils.MusicDataLoader(DATA_DIR, single_composer=COMPOSER)
@@ -230,30 +238,60 @@ def main():
     }
 
     optimizer = {
-        'g': optim.SGD(model['g'].parameters(), LRN_RATE, weight_decay=1.0),
-        'd': optim.SGD(model['d'].parameters(), LRN_RATE*D_LRN_FACTOR, weight_decay=1.0)
+        # 'g': optim.SGD(model['g'].parameters(), G_LRN_RATE, weight_decay=L2_DECAY),
+        'g': optim.Adam(model['g'].parameters(), G_LRN_RATE),
+        'd': optim.Adam(model['d'].parameters(), D_LRN_RATE)
     }
 
     criterion = {
-        'g': nn.MSELoss(), # feature matching
+        'g': nn.MSELoss(reduction='sum'), # feature matching
         'd': DLoss()
     }
+
+    if args.load_g:
+        ckpt = torch.load(os.path.join(CKPT_DIR, G_FN))
+        model['g'].load_state_dict(ckpt)
+        print("Continue training of %s" % os.path.join(CKPT_DIR, G_FN))
+
+    if args.load_d:
+        ckpt = torch.load(os.path.join(CKPT_DIR, D_FN))
+        model['d'].load_state_dict(ckpt)
+        print("Continue training of %s" % os.path.join(CKPT_DIR, D_FN))
 
     if(train_on_gpu):
         model['g'].cuda()
         model['d'].cuda()
 
-    for ep in range(10):
+    for ep in range(args.num_epochs):
         model, trn_g_loss, trn_d_loss = run_training(model, optimizer, criterion, dataloader)
         val_g_loss, val_d_loss = run_validation(model, criterion, dataloader)
 
         print("Epoch %d/%d [Training Loss] G: %0.8f, D: %0.8f "
               "[Validation Loss] G: %0.8f, D: %0.8f" %
-              (ep+1, MAX_EPOCHS, trn_g_loss, trn_d_loss, val_g_loss, val_d_loss))
+              (ep+1, args.num_epochs, trn_g_loss, trn_d_loss, val_g_loss, val_d_loss))
 
-    torch.save(model['g'].state_dict(), os.path.join(CKPT_DIR, G_FN))
-    torch.save(model['d'].state_dict(), os.path.join(CKPT_DIR, D_FN))
+    if not args.no_save_g:
+        torch.save(model['g'].state_dict(), os.path.join(CKPT_DIR, G_FN))
+        print("Saved generator: %s" % os.path.join(CKPT_DIR, G_FN))
+
+    if not args.no_save_d:
+        torch.save(model['d'].state_dict(), os.path.join(CKPT_DIR, D_FN))
+        print("Saved discriminator: %s" % os.path.join(CKPT_DIR, D_FN))
 
 
 if __name__ == "__main__":
-    main()
+
+    ARG_PARSER = ArgumentParser()
+    ARG_PARSER.add_argument('--load_g', action='store_true')
+    ARG_PARSER.add_argument('--load_d', action='store_true')
+    ARG_PARSER.add_argument('--no_save_g', action='store_true')
+    ARG_PARSER.add_argument('--no_save_d', action='store_true')
+    ARG_PARSER.add_argument('--num_epochs', default=500, type=int)
+    ARG_PARSER.add_argument('--seq_len', default=256, type=int)
+    ARG_PARSER.add_argument('--batch_size', default=32, type=int)
+
+    ARGS = ARG_PARSER.parse_args()
+    MAX_SEQ_LEN = ARGS.seq_len
+    BATCH_SIZE = ARGS.batch_size
+
+    main(ARGS)
