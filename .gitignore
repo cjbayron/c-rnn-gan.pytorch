@@ -106,7 +106,7 @@ venv.bak/
 # c-rnn-gan.pytorch
 old/
 #data/
-models/
+models/*
 !models/.gitkeep
 data/*
 !data/classical/
