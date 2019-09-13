@@ -1,8 +1,12 @@
 # Music Generation using C-RNN-GAN in PyTorch
 
-## Status: ONGOING DEVELOPMENT
+## Status
+* As far as implementation of the C-RNN-GAN architecture is concerned, code is already finished. I have yet to train a generator that can output some pleasant MIDI though :sweat_smile:. I'll upload the model and the generated MIDI once done.
 
 ## Prerequisites
 * Python 3.6
 * PyTorch
 * [python3-midi](https://github.com/louisabraham/python3-midi)
+
+
+Original Implemenation (TensorFlow): https://github.com/olofmogren/c-rnn-gan
