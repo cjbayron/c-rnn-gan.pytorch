@@ -1,10 +1,6 @@
-Differences:
+# Music Generation using C-RNN-GAN in PyTorch
 
-Generator
-- replace relu with leaky relu
-
-Discriminator
-- only "end" (head/tail) cell outputs are used
-
-clone python3-midi
-python setup.py install
+## Prerequisites
+* Python 3.6
+* PyTorch
+* [python3-midi](https://github.com/louisabraham/python3-midi)
