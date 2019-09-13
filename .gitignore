@@ -105,6 +105,10 @@ venv.bak/
 
 # c-rnn-gan.pytorch
 old/
-data/
+#data/
 models/
 !models/.gitkeep
+data/*
+!data/classical/
+data/classical/*
+!data/classical/mozart
