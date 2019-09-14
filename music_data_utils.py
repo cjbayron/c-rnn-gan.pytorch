@@ -2,6 +2,11 @@
 # 
 # Written by Olof Mogren, http://mogren.one/
 #
+# This file has been modified by Christopher John Bayron to support
+# c-rnn-gan.pytorch operations. Original file is available in:
+#
+#     https://github.com/olofmogren/c-rnn-gan
+#
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.

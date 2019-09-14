@@ -8,5 +8,9 @@
 * PyTorch
 * [python3-midi](https://github.com/louisabraham/python3-midi)
 
+## License
 
-Original Implemenation (TensorFlow): https://github.com/olofmogren/c-rnn-gan
+This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details
+
+
+**Original Implementation (TensorFlow)**: https://github.com/olofmogren/c-rnn-gan

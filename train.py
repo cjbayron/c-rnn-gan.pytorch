@@ -1,5 +1,22 @@
-''' Train C-RNN-GAN
-'''
+# Copyright 2019 Christopher John Bayron
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This file has been created by Christopher John Bayron based on "rnn_gan.py"
+# by Olof Mogren. The referenced code is available in: 
+#
+#     https://github.com/olofmogren/c-rnn-gan
+
 import os
 from argparse import ArgumentParser
 
@@ -27,7 +44,7 @@ MAX_SEQ_LEN = 200
 
 PERFORM_LOSS_CHECKING = False
 FREEZE_G = False
-FREEZE_D = True
+FREEZE_D = False
 
 
 class DLoss(nn.Module):
@@ -269,6 +286,8 @@ def main(args):
         print("Epoch %d/%d [Training Loss] G: %0.8f, D: %0.8f "
               "[Validation Loss] G: %0.8f, D: %0.8f" %
               (ep+1, args.num_epochs, trn_g_loss, trn_d_loss, val_g_loss, val_d_loss))
+
+        # sampling (to check if generator really learns)
 
     if not args.no_save_g:
         torch.save(model['g'].state_dict(), os.path.join(CKPT_DIR, G_FN))
