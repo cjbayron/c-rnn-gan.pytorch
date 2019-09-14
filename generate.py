@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # This file has been created by Christopher John Bayron based on "rnn_gan.py"
-# by Olof Mogren. The referenced code is available in: 
+# by Olof Mogren. The referenced code is available in:
 #
 #     https://github.com/olofmogren/c-rnn-gan
 
@@ -29,7 +29,7 @@ MAX_SEQ_LEN = 1000
 FILENAME = 'sample.mid'
 
 def generate():
-    '''
+    ''' Sample MIDI from trained generator model
     '''
     # prepare model
     dataloader = music_data_utils.MusicDataLoader(datadir=None)
@@ -52,7 +52,7 @@ def generate():
     g_feats, _ = g_model(z, g_states)
     song_data = g_feats.squeeze().cpu()
     song_data = song_data.detach().numpy()
-    
+
     dataloader.save_data(FILENAME, song_data)
     print('Generated {}'.format(FILENAME))
 

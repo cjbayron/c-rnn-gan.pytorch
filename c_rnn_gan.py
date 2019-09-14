@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # This file has been created by Christopher John Bayron based on "rnn_gan.py"
-# by Olof Mogren. The referenced code is available in: 
+# by Olof Mogren. The referenced code is available in:
 #
 #     https://github.com/olofmogren/c-rnn-gan
 
@@ -22,7 +22,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Generator(nn.Module):
-
+    ''' C-RNN-GAN generator
+    '''
     def __init__(self, num_feats, hidden_units=256, drop_prob=0.6, use_cuda=False):
         super(Generator, self).__init__()
 
@@ -37,6 +38,8 @@ class Generator(nn.Module):
         self.fc_layer2 = nn.Linear(in_features=hidden_units, out_features=num_feats)
 
     def forward(self, z, states):
+        ''' Forward prop
+        '''
         if self.use_cuda:
             z = z.cuda()
         # z: (batch_size, seq_len, num_feats)
@@ -78,7 +81,7 @@ class Generator(nn.Module):
         ''' Initialize hidden state '''
         # create NEW tensor with SAME TYPE as weight
         weight = next(self.parameters()).data
-        
+
         if (self.use_cuda):
             hidden = ((weight.new(batch_size, self.hidden_dim).zero_().cuda(),
                        weight.new(batch_size, self.hidden_dim).zero_().cuda()),
@@ -89,12 +92,13 @@ class Generator(nn.Module):
                        weight.new(batch_size, self.hidden_dim).zero_()),
                       (weight.new(batch_size, self.hidden_dim).zero_(),
                        weight.new(batch_size, self.hidden_dim).zero_()))
-        
+
         return hidden
 
 
 class Discriminator(nn.Module):
-
+    ''' C-RNN-GAN discrminator
+    '''
     def __init__(self, num_feats, hidden_units=256, drop_prob=0.6, use_cuda=False):
 
         super(Discriminator, self).__init__()
@@ -111,6 +115,8 @@ class Discriminator(nn.Module):
         self.fc_layer = nn.Linear(in_features=(2*hidden_units), out_features=1)
 
     def forward(self, note_seq, state):
+        ''' Forward prop
+        '''
         if self.use_cuda:
             note_seq = note_seq.cuda()
 

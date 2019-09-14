@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # This file has been created by Christopher John Bayron based on "rnn_gan.py"
-# by Olof Mogren. The referenced code is available in: 
+# by Olof Mogren. The referenced code is available in:
 #
 #     https://github.com/olofmogren/c-rnn-gan
 
@@ -78,14 +78,14 @@ def control_grad(model, freeze=True):
 
     else: # unfreeze
         for param in model.parameters():
-            param.requires_grad = True 
+            param.requires_grad = True
 
 
 def check_loss(model, loss):
     ''' Check loss and control gradients if necessary
     '''
     control_grad(model['g'], freeze=False)
-    control_grad(model['d'], freeze=False)  
+    control_grad(model['d'], freeze=False)
 
     if loss['d'] == 0.0 and loss['g'] == 0.0:
         print('Both G and D train loss are zero. Exiting.')
@@ -103,7 +103,7 @@ def check_loss(model, loss):
 
 
 def run_training(model, optimizer, criterion, dataloader):
-    ''' Run single epoch
+    ''' Run single training epoch
     '''
     loss = {
         'g': 10.0,
@@ -186,7 +186,7 @@ def run_training(model, optimizer, criterion, dataloader):
 
 
 def run_validation(model, criterion, dataloader):
-    '''
+    ''' Run single validation epoch
     '''
     num_feats = dataloader.get_num_song_features()
     dataloader.rewind(part='validation')
@@ -244,7 +244,7 @@ def main(args):
 
     # First checking if GPU is available
     train_on_gpu = torch.cuda.is_available()
-    if(train_on_gpu):
+    if train_on_gpu:
         print('Training on GPU.')
     else:
         print('No GPU available, training on CPU.')
@@ -275,7 +275,7 @@ def main(args):
         model['d'].load_state_dict(ckpt)
         print("Continue training of %s" % os.path.join(CKPT_DIR, D_FN))
 
-    if(train_on_gpu):
+    if train_on_gpu:
         model['g'].cuda()
         model['d'].cuda()
 
