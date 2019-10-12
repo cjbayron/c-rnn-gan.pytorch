@@ -30,6 +30,7 @@ class Generator(nn.Module):
         # params
         self.hidden_dim = hidden_units
         self.use_cuda = use_cuda
+        self.num_feats = num_feats
 
         self.fc_layer1 = nn.Linear(in_features=(num_feats*2), out_features=hidden_units)
         self.lstm_cell1 = nn.LSTMCell(input_size=hidden_units, hidden_size=hidden_units)

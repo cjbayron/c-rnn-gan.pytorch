@@ -42,10 +42,10 @@ L2_DECAY = 1.0
 COMPOSER = 'mozart'
 MAX_SEQ_LEN = 200
 
-PERFORM_LOSS_CHECKING = False
 FREEZE_G = False
 FREEZE_D = False
 
+EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results)
 
 class DLoss(nn.Module):
     ''' C-RNN-GAN discriminator loss
@@ -67,39 +67,6 @@ class DLoss(nn.Module):
 
         batch_loss = d_loss_real + d_loss_gen
         return torch.mean(batch_loss)
-
-
-def control_grad(model, freeze=True):
-    ''' Freeze/unfreeze optimization of model
-    '''
-    if freeze:
-        for param in model.parameters():
-            param.requires_grad = False
-
-    else: # unfreeze
-        for param in model.parameters():
-            param.requires_grad = True
-
-
-def check_loss(model, loss):
-    ''' Check loss and control gradients if necessary
-    '''
-    control_grad(model['g'], freeze=False)
-    control_grad(model['d'], freeze=False)
-
-    if loss['d'] == 0.0 and loss['g'] == 0.0:
-        print('Both G and D train loss are zero. Exiting.')
-        return False
-    elif loss['d'] == 0.0: # freeze D
-        control_grad(model['d'], freeze=True)
-    elif loss['g'] == 0.0: # freeze G
-        control_grad(model['g'], freeze=True)
-    elif loss['g'] < 2.0 or loss['d'] < 2.0:
-        control_grad(model['d'], freeze=True)
-        if loss['g']*0.7 > loss['d']:
-            control_grad(model['g'], freeze=True)
-
-    return True
 
 
 def run_training(model, optimizer, criterion, dataloader):
@@ -124,11 +91,6 @@ def run_training(model, optimizer, criterion, dataloader):
     while batch_meta is not None and batch_song is not None:
 
         real_batch_sz = batch_song.shape[0]
-
-        # loss checking
-        if PERFORM_LOSS_CHECKING == True:
-            if not check_loss(model, loss):
-                break
 
         # get initial states
         # each batch is independent i.e. not a continuation of previous batch
