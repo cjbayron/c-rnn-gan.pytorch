@@ -37,13 +37,9 @@ D_LRN_RATE = 0.001
 MAX_GRAD_NORM = 5.0
 BATCH_SIZE = 32
 MAX_EPOCHS = 500
-L2_DECAY = 1.0
 
 COMPOSER = 'mozart'
 MAX_SEQ_LEN = 200
-
-FREEZE_G = False
-FREEZE_D = False
 
 EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results)
 
@@ -59,23 +55,20 @@ class DLoss(nn.Module):
         logits_real: logits from D, when input is real
         logits_gen: logits from D, when input is from Generator
         '''
-        logits_real = torch.clamp(logits_real, 1e-1000000, 1.0)
-        logits_gen = torch.clamp(logits_gen, 0.0, 1.0-1e-1000000)
-
+        logits_real = torch.clamp(logits_real, EPSILON, 1.0)
         d_loss_real = -torch.log(logits_real)
-        d_loss_gen = -torch.log(1 - logits_gen)
+
+        logits_gen = torch.clamp((1 - logits_gen), EPSILON, 1.0)
+        d_loss_gen = -torch.log(logits_gen)
 
         batch_loss = d_loss_real + d_loss_gen
         return torch.mean(batch_loss)
 
 
-def run_training(model, optimizer, criterion, dataloader):
+def run_training(model, optimizer, criterion, dataloader, freeze_g=False, freeze_d=False):
     ''' Run single training epoch
     '''
-    loss = {
-        'g': 10.0,
-        'd': 10.0
-    }
+    
 
     num_feats = dataloader.get_num_song_features()
     dataloader.rewind(part='train')
@@ -84,8 +77,10 @@ def run_training(model, optimizer, criterion, dataloader):
     model['g'].train()
     model['d'].train()
 
+    loss = {}
     g_loss_total = 0.0
     d_loss_total = 0.0
+    num_corrects = 0
     num_sample = 0
 
     while batch_meta is not None and batch_song is not None:
@@ -100,7 +95,7 @@ def run_training(model, optimizer, criterion, dataloader):
         d_state = model['d'].init_hidden(real_batch_sz)
 
         #### GENERATOR ####
-        if not FREEZE_G:
+        if not freeze_g:
             optimizer['g'].zero_grad()
         # prepare inputs
         z = torch.empty([real_batch_sz, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
@@ -113,13 +108,13 @@ def run_training(model, optimizer, criterion, dataloader):
         _, d_feats_gen, _ = model['d'](g_feats, d_state)
         # calculate loss, backprop, and update weights of G
         loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
-        if not FREEZE_G:
+        if not freeze_g:
             loss['g'].backward()
             nn.utils.clip_grad_norm_(model['g'].parameters(), max_norm=MAX_GRAD_NORM)
             optimizer['g'].step()
 
         #### DISCRIMINATOR ####
-        if not FREEZE_D:
+        if not freeze_d:
             optimizer['d'].zero_grad()
         # feed real and generated input to discriminator
         d_logits_real, _, _ = model['d'](batch_song, d_state)
@@ -127,24 +122,27 @@ def run_training(model, optimizer, criterion, dataloader):
         d_logits_gen, _, _ = model['d'](g_feats.detach(), d_state)
         # calculate loss, backprop, and update weights of D
         loss['d'] = criterion['d'](d_logits_real, d_logits_gen)
-        if not FREEZE_D:
+        if not freeze_d:
             loss['d'].backward()
             nn.utils.clip_grad_norm_(model['d'].parameters(), max_norm=MAX_GRAD_NORM)
             optimizer['d'].step()
 
         g_loss_total += loss['g'].item()
         d_loss_total += loss['d'].item()
+        num_corrects += (d_logits_real > 0.5).sum().item() + (d_logits_gen < 0.5).sum().item()
         num_sample += real_batch_sz
 
         # fetch next batch
         batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
 
     g_loss_avg, d_loss_avg = 0.0, 0.0
+    d_acc = 0.0
     if num_sample > 0:
         g_loss_avg = g_loss_total / num_sample
         d_loss_avg = d_loss_total / num_sample
+        d_acc = 100 * num_corrects / (2 * num_sample) # 2 because (real + generated)
 
-    return model, g_loss_avg, d_loss_avg
+    return model, g_loss_avg, d_loss_avg, d_acc
 
 
 def run_validation(model, criterion, dataloader):
@@ -159,6 +157,7 @@ def run_validation(model, criterion, dataloader):
 
     g_loss_total = 0.0
     d_loss_total = 0.0
+    num_corrects = 0
     num_sample = 0
 
     while batch_meta is not None and batch_song is not None:
@@ -185,17 +184,42 @@ def run_validation(model, criterion, dataloader):
 
         g_loss_total += g_loss.item()
         d_loss_total += d_loss.item()
+        num_corrects += (d_logits_real > 0.5).sum().item() + (d_logits_gen < 0.5).sum().item()
         num_sample += real_batch_sz
 
         # fetch next batch
         batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='validation')
 
     g_loss_avg, d_loss_avg = 0.0, 0.0
+    d_acc = 0.0
     if num_sample > 0:
         g_loss_avg = g_loss_total / num_sample
         d_loss_avg = d_loss_total / num_sample
+        d_acc = 100 * num_corrects / (2 * num_sample) # 2 because (real + generated)
 
-    return g_loss_avg, d_loss_avg
+    return g_loss_avg, d_loss_avg, d_acc
+
+
+def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
+              freeze_g=False, freeze_d=False, pretraining=False):
+    ''' Run a single epoch
+    '''
+    model, trn_g_loss, trn_d_loss, trn_acc = \
+        run_training(model, optimizer, criterion, dataloader, freeze_g=freeze_g, freeze_d=freeze_d)
+
+    val_g_loss, val_d_loss, val_acc = run_validation(model, criterion, dataloader)
+
+    if pretraining:
+        print("Pretraining Epoch %d/%d" % (ep+1, num_ep))
+    else:
+        print("Epoch %d/%d" % (ep+1, num_ep))
+
+    print("\t[Training] G_loss: %0.8f, D_loss: %0.8f, D_acc: %0.2f\n"
+          "\t[Validation] G_loss: %0.8f, D_loss: %0.8f, D_acc: %0.2f" %
+          (trn_g_loss, trn_d_loss, trn_acc,
+           val_g_loss, val_d_loss, val_acc))
+
+    return model
 
 
 def main(args):
@@ -217,7 +241,6 @@ def main(args):
     }
 
     optimizer = {
-        # 'g': optim.SGD(model['g'].parameters(), G_LRN_RATE, weight_decay=L2_DECAY),
         'g': optim.Adam(model['g'].parameters(), G_LRN_RATE),
         'd': optim.Adam(model['d'].parameters(), D_LRN_RATE)
     }
@@ -241,13 +264,17 @@ def main(args):
         model['g'].cuda()
         model['d'].cuda()
 
-    for ep in range(args.num_epochs):
-        model, trn_g_loss, trn_d_loss = run_training(model, optimizer, criterion, dataloader)
-        val_g_loss, val_d_loss = run_validation(model, criterion, dataloader)
+    if not args.no_pretraining:
+        for ep in range(args.pretraining_epochs):
+            model = run_epoch(model, optimizer, criterion, dataloader,
+                              ep, args.pretraining_epochs, freeze_g=True, pretraining=True)
 
-        print("Epoch %d/%d [Training Loss] G: %0.8f, D: %0.8f "
-              "[Validation Loss] G: %0.8f, D: %0.8f" %
-              (ep+1, args.num_epochs, trn_g_loss, trn_d_loss, val_g_loss, val_d_loss))
+        for ep in range(args.pretraining_epochs):
+            model = run_epoch(model, optimizer, criterion, dataloader,
+                              ep, args.pretraining_epochs, freeze_d=True, pretraining=True)
+
+    for ep in range(args.num_epochs):
+        model = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs)        
 
         # sampling (to check if generator really learns)
 
@@ -267,9 +294,12 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--load_d', action='store_true')
     ARG_PARSER.add_argument('--no_save_g', action='store_true')
     ARG_PARSER.add_argument('--no_save_d', action='store_true')
-    ARG_PARSER.add_argument('--num_epochs', default=500, type=int)
+    ARG_PARSER.add_argument('--num_epochs', default=300, type=int)
     ARG_PARSER.add_argument('--seq_len', default=256, type=int)
     ARG_PARSER.add_argument('--batch_size', default=32, type=int)
+
+    ARG_PARSER.add_argument('--no_pretraining', action='store_true')
+    ARG_PARSER.add_argument('--pretraining_epochs', default=10, type=int)
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
