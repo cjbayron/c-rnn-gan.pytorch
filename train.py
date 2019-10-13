@@ -241,8 +241,8 @@ def main(args):
     }
 
     optimizer = {
-        'g': optim.Adam(model['g'].parameters(), G_LRN_RATE),
-        'd': optim.Adam(model['d'].parameters(), D_LRN_RATE)
+        'g': optim.Adam(model['g'].parameters(), args.g_lrn_rate),
+        'd': optim.Adam(model['d'].parameters(), args.d_lrn_rate)
     }
 
     criterion = {
@@ -294,9 +294,12 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--load_d', action='store_true')
     ARG_PARSER.add_argument('--no_save_g', action='store_true')
     ARG_PARSER.add_argument('--no_save_d', action='store_true')
+
     ARG_PARSER.add_argument('--num_epochs', default=300, type=int)
     ARG_PARSER.add_argument('--seq_len', default=256, type=int)
     ARG_PARSER.add_argument('--batch_size', default=32, type=int)
+    ARG_PARSER.add_argument('--g_lrn_rate', default=0.001, type=float)
+    ARG_PARSER.add_argument('--d_lrn_rate', default=0.001, type=float)
 
     ARG_PARSER.add_argument('--no_pretraining', action='store_true')
     ARG_PARSER.add_argument('--pretraining_epochs', default=10, type=int)
