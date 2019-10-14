@@ -219,7 +219,7 @@ def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
           (trn_g_loss, trn_d_loss, trn_acc,
            val_g_loss, val_d_loss, val_acc))
 
-    return model, trn_g_loss
+    return model, trn_acc
 
 
 def main(args):
@@ -278,10 +278,10 @@ def main(args):
         # if ep % args.freeze_d_every == 0:
         #     freeze_d = not freeze_d
 
-        model, trn_g_loss = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs, freeze_d=freeze_d)
+        model, trn_acc = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs, freeze_d=freeze_d)
         # conditional freezing
         freeze_d = False
-        if trn_g_loss > 5000:
+        if trn_acc >= 95.0:
             freeze_d = True
 
         # sampling (to check if generator really learns)
