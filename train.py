@@ -210,9 +210,9 @@ def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
     val_g_loss, val_d_loss, val_acc = run_validation(model, criterion, dataloader)
 
     if pretraining:
-        print("Pretraining Epoch %d/%d" % (ep+1, num_ep))
+        print("Pretraining Epoch %d/%d " % (ep+1, num_ep), "[Freeze G: ", freeze_g, ", Freeze D: ", freeze_d, "]")
     else:
-        print("Epoch %d/%d" % (ep+1, num_ep))
+        print("Epoch %d/%d " % (ep+1, num_ep), "[Freeze G: ", freeze_g, ", Freeze D: ", freeze_d, "]")
 
     print("\t[Training] G_loss: %0.8f, D_loss: %0.8f, D_acc: %0.2f\n"
           "\t[Validation] G_loss: %0.8f, D_loss: %0.8f, D_acc: %0.2f" %
@@ -273,8 +273,12 @@ def main(args):
             model = run_epoch(model, optimizer, criterion, dataloader,
                               ep, args.pretraining_epochs, freeze_d=True, pretraining=True)
 
+    freeze_d = True
     for ep in range(args.num_epochs):
-        model = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs)        
+        if ep % args.freeze_d_every == 0:
+            freeze_d = not freeze_d
+
+        model = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs, freeze_d=freeze_d)
 
         # sampling (to check if generator really learns)
 
@@ -303,6 +307,7 @@ if __name__ == "__main__":
 
     ARG_PARSER.add_argument('--no_pretraining', action='store_true')
     ARG_PARSER.add_argument('--pretraining_epochs', default=10, type=int)
+    ARG_PARSER.add_argument('--freeze_d_every', default=5, type=int)
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
