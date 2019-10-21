@@ -112,3 +112,4 @@ data/*
 !data/classical/
 data/classical/*
 !data/classical/mozart
+!data/classical/sonata-ish

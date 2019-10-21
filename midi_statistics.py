@@ -439,7 +439,7 @@ def get_all_stats(midi_pattern):
   stats['intensity_span'] = max_int-min_int
 
   stats['polyphony_score'] = get_polyphony_score(midi_pattern)
-  stats['top_10_intervals'] = get_top_k_intervals(midi_pattern, 10)
+  stats['top_10_intervals'] = get_top_k_intervals(midi_pattern, 10) # NOT melodic interval, tick interval
   stats['top_2_interval_difference'] = 0.0
   if len(stats['top_10_intervals']) > 1:
     stats['top_2_interval_difference'] = abs(stats['top_10_intervals'][1][0]-stats['top_10_intervals'][0][0])
