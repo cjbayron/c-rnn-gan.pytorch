@@ -105,6 +105,8 @@ venv.bak/
 
 # c-rnn-gan.pytorch
 #test/
+test/assets
+test/misc
 #data/
 models/*
 !models/.gitkeep
