@@ -104,7 +104,7 @@ venv.bak/
 .mypy_cache/
 
 # c-rnn-gan.pytorch
-old/
+#test/
 #data/
 models/*
 !models/.gitkeep

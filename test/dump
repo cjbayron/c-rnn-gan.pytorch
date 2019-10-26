@@ -1,0 +1,113 @@
+************* Module c_rnn_gan
+C: 85, 0: Unnecessary parens after 'if' keyword (superfluous-parens)
+C:144, 0: Trailing whitespace (trailing-whitespace)
+C:155, 0: Trailing whitespace (trailing-whitespace)
+C:  1, 0: Missing module docstring (missing-docstring)
+E: 20, 0: Unable to import 'torch' (import-error)
+E: 21, 0: Unable to import 'torch.nn' (import-error)
+E: 22, 0: Unable to import 'torch.nn.functional' (import-error)
+C: 40, 4: Invalid argument name "z" (invalid-name)
+R: 40, 4: Too many local variables (17/15) (too-many-locals)
+C: 65,12: Invalid variable name "h1" (invalid-name)
+C: 65,16: Invalid variable name "c1" (invalid-name)
+C: 66,12: Invalid variable name "h1" (invalid-name)
+C: 67,12: Invalid variable name "h2" (invalid-name)
+C: 67,16: Invalid variable name "c2" (invalid-name)
+W: 47,20: Unused variable 'seq_len' (unused-variable)
+
+
+Report
+======
+70 statements analysed.
+
+Statistics by type
+------------------
+
++---------+-------+-----------+-----------+------------+---------+
+|type     |number |old number |difference |%documented |%badname |
++=========+=======+===========+===========+============+=========+
+|module   |1      |NC         |NC         |0.00        |0.00     |
++---------+-------+-----------+-----------+------------+---------+
+|class    |2      |NC         |NC         |100.00      |0.00     |
++---------+-------+-----------+-----------+------------+---------+
+|method   |6      |NC         |NC         |100.00      |0.00     |
++---------+-------+-----------+-----------+------------+---------+
+|function |0      |NC         |NC         |0           |0        |
++---------+-------+-----------+-----------+------------+---------+
+
+
+
+Raw metrics
+-----------
+
++----------+-------+------+---------+-----------+
+|type      |number |%     |previous |difference |
++==========+=======+======+=========+===========+
+|code      |87     |55.41 |NC       |NC         |
++----------+-------+------+---------+-----------+
+|docstring |10     |6.37  |NC       |NC         |
++----------+-------+------+---------+-----------+
+|comment   |33     |21.02 |NC       |NC         |
++----------+-------+------+---------+-----------+
+|empty     |27     |17.20 |NC       |NC         |
++----------+-------+------+---------+-----------+
+
+
+
+Duplication
+-----------
+
++-------------------------+------+---------+-----------+
+|                         |now   |previous |difference |
++=========================+======+=========+===========+
+|nb duplicated lines      |0     |NC       |NC         |
++-------------------------+------+---------+-----------+
+|percent duplicated lines |0.000 |NC       |NC         |
++-------------------------+------+---------+-----------+
+
+
+
+Messages by category
+--------------------
+
++-----------+-------+---------+-----------+
+|type       |number |previous |difference |
++===========+=======+=========+===========+
+|convention |10     |NC       |NC         |
++-----------+-------+---------+-----------+
+|refactor   |1      |NC       |NC         |
++-----------+-------+---------+-----------+
+|warning    |1      |NC       |NC         |
++-----------+-------+---------+-----------+
+|error      |3      |NC       |NC         |
++-----------+-------+---------+-----------+
+
+
+
+Messages
+--------
+
++--------------------+------------+
+|message id          |occurrences |
++====================+============+
+|invalid-name        |6           |
++--------------------+------------+
+|import-error        |3           |
++--------------------+------------+
+|trailing-whitespace |2           |
++--------------------+------------+
+|unused-variable     |1           |
++--------------------+------------+
+|too-many-locals     |1           |
++--------------------+------------+
+|superfluous-parens  |1           |
++--------------------+------------+
+|missing-docstring   |1           |
++--------------------+------------+
+
+
+
+Global evaluation
+-----------------
+Your code has been rated at 6.14/10
+
