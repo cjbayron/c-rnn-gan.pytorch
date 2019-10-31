@@ -149,7 +149,7 @@ def read_one_file(path, filename):
     return song_data
 
 
-def get_midi_pattern(song_data, bpm):
+def get_midi_pattern(song_data, bpm, tick_is_relative):
     """
     get_midi_pattern takes a song in internal representation 
     (a tensor of dimensions [songlength, self.num_song_features]).
@@ -215,7 +215,12 @@ def get_midi_pattern(song_data, bpm):
     song_events_absolute_ticks = []
     abs_tick_note_beginning = 0.0
     for frame in song_data:
-      abs_tick_note_beginning += frame[TICKS_FROM_PREV_START]
+      # to support absolute ticks
+      if tick_is_relative:
+      	abs_tick_note_beginning += frame[TICKS_FROM_PREV_START]
+      else:
+      	abs_tick_note_beginning = frame[TICKS_FROM_PREV_START]
+
       for subframe in range(tones_per_cell):
         offset = subframe*NUM_FEATURES_PER_TONE
         tick_len           = int(round(frame[offset+LENGTH]))
@@ -258,7 +263,7 @@ def save_midi_pattern(filename, midi_pattern):
 	  midi.write_midifile(filename, midi_pattern)
 
 
-def save_data(filename, song_data, bpm=45):
+def save_data(filename, song_data, bpm=48, tick_is_relative=True):
 	"""
 	save_data takes a filename and a song in internal representation 
 	(a tensor of dimensions [songlength, 3]).
@@ -270,6 +275,6 @@ def save_data(filename, song_data, bpm=45):
 
 	Can be used with filename == None. Then nothing is saved, but only returned.
 	"""
-	midi_pattern = get_midi_pattern(song_data, bpm=bpm)
+	midi_pattern = get_midi_pattern(song_data, bpm=bpm, tick_is_relative=tick_is_relative)
 	save_midi_pattern(filename, midi_pattern)
 	return midi_pattern
