@@ -36,9 +36,8 @@ G_LRN_RATE = 0.001
 D_LRN_RATE = 0.001
 MAX_GRAD_NORM = 5.0
 BATCH_SIZE = 32
-MAX_EPOCHS = 500
 
-COMPOSER = 'mozart'
+COMPOSER = 'sonata-ish'
 MAX_SEQ_LEN = 200
 
 EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results)
@@ -69,7 +68,6 @@ def run_training(model, optimizer, criterion, dataloader, freeze_g=False, freeze
     ''' Run single training epoch
     '''
     
-
     num_feats = dataloader.get_num_song_features()
     dataloader.rewind(part='train')
     batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
@@ -240,10 +238,16 @@ def main(args):
         'd': Discriminator(num_feats, use_cuda=train_on_gpu)
     }
 
-    optimizer = {
-        'g': optim.Adam(model['g'].parameters(), args.g_lrn_rate),
-        'd': optim.Adam(model['d'].parameters(), args.d_lrn_rate)
-    }
+    if args.use_sgd:
+        optimizer = {
+            'g': optim.sgd(model['g'].parameters(), lr=0.01, momentum=0.9),
+            'd': optim.sgd(model['d'].parameters(), lr=0.001, momentum=0.9)
+        }
+    else:
+        optimizer = {
+            'g': optim.Adam(model['g'].parameters(), args.g_lrn_rate),
+            'd': optim.Adam(model['d'].parameters(), args.d_lrn_rate)
+        }
 
     criterion = {
         'g': nn.MSELoss(reduction='sum'), # feature matching
@@ -312,6 +316,7 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--no_pretraining', action='store_true')
     ARG_PARSER.add_argument('--pretraining_epochs', default=10, type=int)
     # ARG_PARSER.add_argument('--freeze_d_every', default=5, type=int)
+    ARG_PARSER.add_argument('--use_sgd', action='store_true')
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
