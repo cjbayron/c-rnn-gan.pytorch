@@ -1,7 +1,6 @@
 # explore data
 import os, midi, math
 
-
 # INDICES IN BATCHES (LENGTH,FREQ,VELOCITY are repeated tones_per_cell times):
 TICKS_FROM_PREV_START = 0
 LENGTH     = 1
@@ -15,6 +14,8 @@ NUM_FEATURES_PER_TONE = 3
 
 output_ticks_per_quarter_note = 384.0
 tones_per_cell=1
+
+ideal_tempo = 120.0
 
 def tone_to_freq(tone):
   """
@@ -104,6 +105,7 @@ def read_one_file(path, filename):
     #
     
     song_data = []
+    tempos = []
     
     # Tempo:
     ticks_per_quarter_note = float(midi_pattern.resolution)
@@ -116,7 +118,10 @@ def read_one_file(path, filename):
       not_closed_notes = []
       for event in track:
         if type(event) == midi.events.SetTempoEvent:
-          pass # These are currently ignored
+          td = event.data # tempo data
+          tempo = 60 * 1000000 / (td[0]*(256**2) + td[1]*256 + td[2])
+          tempos.append(tempo)
+
         elif (type(event) == midi.events.NoteOffEvent) or \
              (type(event) == midi.events.NoteOnEvent and \
               event.velocity == 0):
@@ -144,7 +149,13 @@ def read_one_file(path, filename):
         #print (('Warning: found no NoteOffEvent for this note. Will close it. {}'.format(e))
         e[LENGTH] = float(ticks_per_quarter_note)/input_ticks_per_output_tick
         song_data.append(e)
+
     song_data.sort(key=lambda e: e[BEGIN_TICK])
+
+    # tick adjustment (based on tempo)
+    avg_tempo = sum(tempos) / len(tempos)
+    for frame in song_data:
+    	frame[BEGIN_TICK] = frame[BEGIN_TICK] * ideal_tempo/avg_tempo
 
     return song_data
 

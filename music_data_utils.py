@@ -39,38 +39,25 @@ VELOCITY   = 3
 BEGIN_TICK = 0
 
 NUM_FEATURES_PER_TONE = 3
+IDEAL_TEMPO = 120.0
 
 debug = ''
 #debug = 'overfit'
 
 sources                              = {}
 sources['classical']                 = {}
-sources['classical']['mozart']       = ['http://www.midiworld.com/mozart.htm','http://www.classicalmidi.co.uk/mozart.htm']
 
 file_list = {}
 
 file_list['validation'] = [
-'classical/mozart/mfig.mid', \
-'classical/mozart/57911meno10.mid', \
-'classical/mozart/mozk622c.mid', \
-'classical/mozart/2025pianos3no2.mid', \
-'classical/mozart/2917requm2.mid', \
-'classical/mozart/2294rondomozSteven.mid', \
-'classical/mozart/2249phantasieSteven.mid', \
-'classical/mozart/jm_mozdi.mid', \
-'classical/mozart/2026pianos3no3.mid', \
-'classical/mozart/mozk216c.mid', \
-'classical/mozart/mozk246a.mid', \
-'classical/mozart/mozk333b.mid', \
-'classical/mozart/mozk175b.mid', \
-'classical/mozart/mozk488a.mid', \
-'classical/mozart/mozk218c.mid', \
-'classical/mozart/245div1.mid', \
-'classical/mozart/mozk333a.mid', \
-'classical/mozart/mozk299a.mid', \
-'classical/mozart/4321_duett.mid', \
-'classical/mozart/2344serenadeinbb.mid', \
-'classical/mozart/495p141ck.mid'
+'classical/sonata-ish/mozk333c.mid', \
+'classical/sonata-ish/mozk331b.mid', \
+'classical/sonata-ish/mozk313a.mid', \
+'classical/sonata-ish/mozk310b.mid', \
+'classical/sonata-ish/mozk299a.mid', \
+'classical/sonata-ish/mozk622c.mid', \
+'classical/sonata-ish/mozk545b.mid', \
+'classical/sonata-ish/mozk299a.mid'
 ]
 
 file_list['test'] = []
@@ -237,6 +224,7 @@ class MusicDataLoader(object):
     #
     
     song_data = []
+    tempos = []
     
     # Tempo:
     ticks_per_quarter_note = float(midi_pattern.resolution)
@@ -250,7 +238,10 @@ class MusicDataLoader(object):
       not_closed_notes = []
       for event in track:
         if type(event) == midi.events.SetTempoEvent:
-          pass # These are currently ignored
+          td = event.data # tempo data
+          tempo = 60 * 1000000 / (td[0]*(256**2) + td[1]*256 + td[2])
+          tempos.append(tempo)
+
         elif (type(event) == midi.events.NoteOffEvent) or \
              (type(event) == midi.events.NoteOnEvent and \
               event.velocity == 0):
@@ -287,6 +278,12 @@ class MusicDataLoader(object):
         song_data.append([0.0, 440.0, 0.0, pace_tick, 0.0])
         pace_tick += float(ticks_per_quarter_note)/input_ticks_per_output_tick
       song_data.sort(key=lambda e: e[BEGIN_TICK])
+
+    # tick adjustment (based on tempo)
+    avg_tempo = sum(tempos) / len(tempos)
+    for frame in song_data:
+      frame[BEGIN_TICK] = frame[BEGIN_TICK] * IDEAL_TEMPO/avg_tempo
+
     return song_data
 
   def rewind(self, part='train'):
@@ -340,8 +337,6 @@ class MusicDataLoader(object):
       batch_genrecomposer = np.ndarray(shape=[batchsize, num_meta_features])
       batch_songs = np.ndarray(shape=[batchsize, songlength, num_song_features])
 
-      #print ( 'batch shape: {}'.format(batch_songs.shape)
-      zeroframe = np.zeros(shape=[num_song_features])
       for s in range(len(batch)):
         songmatrix = np.ndarray(shape=[songlength, num_song_features])
         composeronehot = onehot(self.composers.index(batch[s][1]), len(self.composers))
@@ -459,7 +454,7 @@ class MusicDataLoader(object):
     # Multiply with output_ticks_pr_input_tick for output ticks.
     midi_pattern = midi.Pattern([], resolution=int(self.output_ticks_per_quarter_note))
     cur_track = midi.Track([])
-    cur_track.append(midi.events.SetTempoEvent(tick=0, bpm=45))
+    cur_track.append(midi.events.SetTempoEvent(tick=0, bpm=IDEAL_TEMPO))
     future_events = {}
     last_event_tick = 0
     

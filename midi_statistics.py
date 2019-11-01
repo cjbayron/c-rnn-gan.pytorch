@@ -492,7 +492,7 @@ def main():
         print ('Max tone: {}, {:.1f} Hz.'.format(tone_to_tone_name(stats['tone_max']), stats['freq_max']))
         print ('Span: {} tones, {:.1f} Hz.'.format(stats['tone_span'], stats['freq_span']))
         print ('Unique tones: {}'.format(stats['tones_unique']))
-        for r in xrange(2,10):
+        for r in range(2,10):
           print('Repetitions of len {}: {}'.format(r, stats['repetitions_{}'.format(r)]))
         print('Estimated beat: {}. Avg ticks off: {:.2f}.'.format(stats['estimated_beat'], stats['estimated_beat_avg_ticks_off']))
         print('Intensity: min: {}, max: {}.'.format(stats['intensity_min'], stats['intensity_max']))
