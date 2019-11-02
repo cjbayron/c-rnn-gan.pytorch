@@ -304,10 +304,11 @@ def main(args):
         #     freeze_d = not freeze_d
 
         model, trn_acc = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs, freeze_d=freeze_d)
-        # conditional freezing
-        freeze_d = False
-        if trn_acc >= 95.0:
-            freeze_d = True
+        if args.conditional_freezing:
+            # conditional freezing
+            freeze_d = False
+            if trn_acc >= 95.0:
+                freeze_d = True
 
         # sampling (to check if generator really learns)
 
@@ -338,6 +339,7 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--pretraining_epochs', default=5, type=int)
     # ARG_PARSER.add_argument('--freeze_d_every', default=5, type=int)
     ARG_PARSER.add_argument('--use_sgd', action='store_true')
+    ARG_PARSER.add_argument('--conditional_freezing', action='store_true')
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
