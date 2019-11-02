@@ -222,7 +222,7 @@ def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
     g_states = model['g'].init_hidden(1)
     num_feats = dataloader.get_num_song_features()
     z = torch.empty([1, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
-    if use_gpu:
+    if torch.cuda.is_available():
         z = z.cuda()
         model['g'].cuda()
 
