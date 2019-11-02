@@ -250,7 +250,7 @@ def main(args):
         }
 
     criterion = {
-        'g': nn.MSELoss(reduction='sum'), # feature matching
+        'g': nn.MSELoss(reduction='mean'), # feature matching
         'd': DLoss()
     }
 
@@ -309,12 +309,12 @@ if __name__ == "__main__":
 
     ARG_PARSER.add_argument('--num_epochs', default=300, type=int)
     ARG_PARSER.add_argument('--seq_len', default=256, type=int)
-    ARG_PARSER.add_argument('--batch_size', default=32, type=int)
+    ARG_PARSER.add_argument('--batch_size', default=16, type=int)
     ARG_PARSER.add_argument('--g_lrn_rate', default=0.001, type=float)
     ARG_PARSER.add_argument('--d_lrn_rate', default=0.001, type=float)
 
     ARG_PARSER.add_argument('--no_pretraining', action='store_true')
-    ARG_PARSER.add_argument('--pretraining_epochs', default=10, type=int)
+    ARG_PARSER.add_argument('--pretraining_epochs', default=5, type=int)
     # ARG_PARSER.add_argument('--freeze_d_every', default=5, type=int)
     ARG_PARSER.add_argument('--use_sgd', action='store_true')
 

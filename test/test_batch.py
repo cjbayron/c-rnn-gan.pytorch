@@ -7,7 +7,7 @@ DATA_DIR = 'data'
 COMPOSER = 'sonata-ish'
 
 BATCH_SIZE = 32
-MAX_SEQ_LEN = 200
+MAX_SEQ_LEN = 256
 
 if __name__ == "__main__":
     dataloader = music_data_utils.MusicDataLoader(DATA_DIR, single_composer=COMPOSER)
@@ -19,6 +19,7 @@ if __name__ == "__main__":
 
         # checking
         dataloader.save_data('sample.mid', batch_song[0])
+        # print(batch_song[0][:16])
 
         break
 
