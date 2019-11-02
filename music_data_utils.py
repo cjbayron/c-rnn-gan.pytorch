@@ -434,7 +434,7 @@ class MusicDataLoader(object):
   def get_num_meta_features(self):
     return len(self.genres)+len(self.composers)
 
-  def get_midi_pattern(self, song_data):
+  def get_midi_pattern(self, song_data, bpm):
     """
     get_midi_pattern takes a song in internal representation 
     (a tensor of dimensions [songlength, self.num_song_features]).
@@ -508,7 +508,7 @@ class MusicDataLoader(object):
     de_norm_std(song_data, LENGTH)
     de_norm_std(song_data, VELOCITY)
     de_norm_minmax(song_data, TONE)
-    
+
     for frame in song_data:
       abs_tick_note_beginning += int(round(frame[TICKS_FROM_PREV_START]))
       for subframe in range(self.tones_per_cell):
@@ -549,7 +549,7 @@ class MusicDataLoader(object):
     if filename is not None:
       midi.write_midifile(filename, midi_pattern)
 
-  def save_data(self, filename, song_data):
+  def save_data(self, filename, song_data, bpm=IDEAL_TEMPO):
     """
     save_data takes a filename and a song in internal representation 
     (a tensor of dimensions [songlength, 3]).
@@ -561,7 +561,7 @@ class MusicDataLoader(object):
 
     Can be used with filename == None. Then nothing is saved, but only returned.
     """
-    midi_pattern = self.get_midi_pattern(song_data)
+    midi_pattern = self.get_midi_pattern(song_data, bpm=bpm)
     self.save_midi_pattern(filename, midi_pattern)
     return midi_pattern
 

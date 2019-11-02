@@ -217,6 +217,27 @@ def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
           (trn_g_loss, trn_d_loss, trn_acc,
            val_g_loss, val_d_loss, val_acc))
 
+    # -- DEBUG --
+    # generate from model then save to MIDI file
+    g_states = model['g'].init_hidden(1)
+    num_feats = dataloader.get_num_song_features()
+    z = torch.empty([1, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
+    if use_gpu:
+        z = z.cuda()
+        model['g'].cuda()
+
+    model['g'].eval()
+    g_feats, _ = model['g'](z, g_states)
+    song_data = g_feats.squeeze().cpu()
+    song_data = song_data.detach().numpy()
+
+    if (ep+1) == num_ep:
+        midi_data = dataloader.save_data('sample.mid', song_data)
+    else:
+        midi_data = dataloader.save_data(None, song_data)
+        print(midi_data[0][:16])
+    # -- DEBUG --
+
     return model, trn_acc
 
 
@@ -250,7 +271,7 @@ def main(args):
         }
 
     criterion = {
-        'g': nn.MSELoss(reduction='mean'), # feature matching
+        'g': nn.MSELoss(reduction='sum'), # feature matching
         'd': DLoss()
     }
 
