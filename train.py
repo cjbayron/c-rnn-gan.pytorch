@@ -261,8 +261,8 @@ def main(args):
 
     if args.use_sgd:
         optimizer = {
-            'g': optim.SGD(model['g'].parameters(), lr=0.01, momentum=0.9),
-            'd': optim.SGD(model['d'].parameters(), lr=0.001, momentum=0.9)
+            'g': optim.SGD(model['g'].parameters(), lr=args.g_lrn_rate, momentum=0.9),
+            'd': optim.SGD(model['d'].parameters(), lr=args.d_lrn_rate, momentum=0.9)
         }
     else:
         optimizer = {
