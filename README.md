@@ -16,3 +16,8 @@ This project is licensed under the Apache License, Version 2.0 - see the [LICENS
 
 
 **Original Implementation (TensorFlow)**: https://github.com/olofmogren/c-rnn-gan
+
+## Things to Try
+
+* SGD w/ decay
+* Min-max all features then use sigmoid
