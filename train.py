@@ -45,8 +45,9 @@ EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results
 class DLoss(nn.Module):
     ''' C-RNN-GAN discriminator loss
     '''
-    def __init__(self):
+    def __init__(self, label_smoothing=False):
         super(DLoss, self).__init__()
+        self.label_smoothing = label_smoothing
 
     def forward(self, logits_real, logits_gen):
         ''' Discriminator loss
@@ -55,10 +56,16 @@ class DLoss(nn.Module):
         logits_gen: logits from D, when input is from Generator
         '''
         logits_real = torch.clamp(logits_real, EPSILON, 1.0)
-        d_loss_real = -torch.log(logits_real)
+        if self.label_smoothing:
+            d_loss_real = -torch.log(logits_real) * 0.9
+        else:
+            d_loss_real = -torch.log(logits_real)
 
         logits_gen = torch.clamp((1 - logits_gen), EPSILON, 1.0)
-        d_loss_gen = -torch.log(logits_gen)
+        if self.label_smoothing:
+            d_loss_gen = -torch.log(logits_gen) * 0.1
+        else:
+            d_loss_gen = -torch.log(logits_gen)
 
         batch_loss = d_loss_real + d_loss_gen
         return torch.mean(batch_loss)
@@ -272,7 +279,7 @@ def main(args):
 
     criterion = {
         'g': nn.MSELoss(reduction='sum'), # feature matching
-        'd': DLoss()
+        'd': DLoss(args.label_smoothing)
     }
 
     if args.load_g:
@@ -290,13 +297,13 @@ def main(args):
         model['d'].cuda()
 
     if not args.no_pretraining:
-        for ep in range(args.pretraining_epochs):
+        for ep in range(args.d_pretraining_epochs):
             model, _ = run_epoch(model, optimizer, criterion, dataloader,
-                              ep, args.pretraining_epochs, freeze_g=True, pretraining=True)
+                              ep, args.d_pretraining_epochs, freeze_g=True, pretraining=True)
 
-        for ep in range(args.pretraining_epochs):
+        for ep in range(args.g_pretraining_epochs):
             model, _ = run_epoch(model, optimizer, criterion, dataloader,
-                              ep, args.pretraining_epochs, freeze_d=True, pretraining=True)
+                              ep, args.g_pretraining_epochs, freeze_d=True, pretraining=True)
 
     freeze_d = False
     for ep in range(args.num_epochs):
@@ -336,10 +343,12 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--d_lrn_rate', default=0.001, type=float)
 
     ARG_PARSER.add_argument('--no_pretraining', action='store_true')
-    ARG_PARSER.add_argument('--pretraining_epochs', default=5, type=int)
+    ARG_PARSER.add_argument('--g_pretraining_epochs', default=5, type=int)
+    ARG_PARSER.add_argument('--d_pretraining_epochs', default=5, type=int)
     # ARG_PARSER.add_argument('--freeze_d_every', default=5, type=int)
     ARG_PARSER.add_argument('--use_sgd', action='store_true')
     ARG_PARSER.add_argument('--conditional_freezing', action='store_true')
+    ARG_PARSER.add_argument('--label_smoothing', action='store_true')
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
