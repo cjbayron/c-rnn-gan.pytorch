@@ -54,18 +54,20 @@ class DLoss(nn.Module):
 
         logits_real: logits from D, when input is real
         logits_gen: logits from D, when input is from Generator
+
+        loss = -(ylog(p) + (1-y)log(1-p))
+
         '''
         logits_real = torch.clamp(logits_real, EPSILON, 1.0)
+        d_loss_real = -torch.log(logits_real)
+
         if self.label_smoothing:
-            d_loss_real = -torch.log(logits_real) * 0.9
-        else:
-            d_loss_real = -torch.log(logits_real)
+            p_fake = torch.clamp((1 - logits_real), EPSILON, 1.0)
+            d_loss_fake = -torch.log(p_fake)
+            d_loss_real = 0.9*d_loss_real + 0.1*d_loss_fake
 
         logits_gen = torch.clamp((1 - logits_gen), EPSILON, 1.0)
-        if self.label_smoothing:
-            d_loss_gen = -torch.log(logits_gen) * 0.1
-        else:
-            d_loss_gen = -torch.log(logits_gen)
+        d_loss_gen = -torch.log(logits_gen)
 
         batch_loss = d_loss_real + d_loss_gen
         return torch.mean(batch_loss)
