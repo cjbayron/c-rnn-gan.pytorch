@@ -42,6 +42,19 @@ MAX_SEQ_LEN = 200
 
 EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results)
 
+class GLoss(nn.Module):
+    ''' C-RNN-GAN generator loss
+    '''
+    def __init__(self):
+        super(GLoss, self).__init__()
+
+    def forward(self, logits_gen):
+        logits_gen = torch.clamp(logits_gen, EPSILON, 1.0)
+        batch_loss = -torch.log(logits_gen)
+
+        return torch.mean(batch_loss)
+
+
 class DLoss(nn.Module):
     ''' C-RNN-GAN discriminator loss
     '''
@@ -110,11 +123,17 @@ def run_training(model, optimizer, criterion, dataloader, freeze_g=False, freeze
 
         # feed inputs to generator
         g_feats, _ = model['g'](z, g_states)
-        # feed real and generated input to discriminator
-        _, d_feats_real, _ = model['d'](batch_song, d_state)
-        _, d_feats_gen, _ = model['d'](g_feats, d_state)
+
         # calculate loss, backprop, and update weights of G
-        loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
+        if isinstance(criterion['g'], GLoss):
+            d_logits_gen, _, _ = model['d'](g_feats, d_state)
+            loss['g'] = criterion['g'](d_logits_gen)
+        else: # feature matching
+            # feed real and generated input to discriminator
+            _, d_feats_real, _ = model['d'](batch_song, d_state)
+            _, d_feats_gen, _ = model['d'](g_feats, d_state)
+            loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
+
         if not freeze_g:
             loss['g'].backward()
             nn.utils.clip_grad_norm_(model['g'].parameters(), max_norm=MAX_GRAD_NORM)
@@ -186,7 +205,11 @@ def run_validation(model, criterion, dataloader):
         d_logits_real, d_feats_real, _ = model['d'](batch_song, d_state)
         d_logits_gen, d_feats_gen, _ = model['d'](g_feats, d_state)
         # calculate loss
-        g_loss = criterion['g'](d_feats_real, d_feats_gen)
+        if isinstance(criterion['g'], GLoss):
+            g_loss = criterion['g'](d_logits_gen)
+        else: # feature matching
+            g_loss = criterion['g'](d_feats_real, d_feats_gen)
+
         d_loss = criterion['d'](d_logits_real, d_logits_gen)
 
         g_loss_total += g_loss.item()
@@ -280,7 +303,7 @@ def main(args):
         }
 
     criterion = {
-        'g': nn.MSELoss(reduction='sum'), # feature matching
+        'g': nn.MSELoss(reduction='sum') if args.feature_matching else GLoss(),
         'd': DLoss(args.label_smoothing)
     }
 
@@ -351,6 +374,7 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--use_sgd', action='store_true')
     ARG_PARSER.add_argument('--conditional_freezing', action='store_true')
     ARG_PARSER.add_argument('--label_smoothing', action='store_true')
+    ARG_PARSER.add_argument('--feature_matching', action='store_true')
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
