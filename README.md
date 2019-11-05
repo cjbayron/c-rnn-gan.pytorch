@@ -19,5 +19,18 @@ This project is licensed under the Apache License, Version 2.0 - see the [LICENS
 
 ## Things to Try
 
+* CHECK VALIDITY OF BATCHES!!!
+
+* Need to find hyperparams that match
+	* batch size & pre-training epochs
+	* batch size & learning rate
+
+* Label smoothing (turn positive label from 1 to a value like 0.9) !
+* Multi-scale gradient (https://arxiv.org/abs/1903.06048) - possible for C-RNN-GAN?
+* TTUR (D lr > G lr)
+* Spectral normalization (https://arxiv.org/abs/1802.05957) - possible for C-RNN-GAN?
+
+* Try not to use feature matching
+* "No wasted midi" - fix batches
 * SGD w/ decay
 * Min-max all features then use sigmoid
