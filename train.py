@@ -29,16 +29,17 @@ import music_data_utils
 
 DATA_DIR = 'data'
 CKPT_DIR = 'models'
+COMPOSER = 'sonata-ish'
+
 G_FN = 'c_rnn_gan_g.pth'
 D_FN = 'c_rnn_gan_d.pth'
 
 G_LRN_RATE = 0.001
 D_LRN_RATE = 0.001
 MAX_GRAD_NORM = 5.0
-BATCH_SIZE = 32
-
-COMPOSER = 'sonata-ish'
+# following values are modified at runtime
 MAX_SEQ_LEN = 200
+BATCH_SIZE = 32
 
 EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results)
 
@@ -250,6 +251,7 @@ def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
            val_g_loss, val_d_loss, val_acc))
 
     # -- DEBUG --
+    # This is for monitoring the current output from generator
     # generate from model then save to MIDI file
     g_states = model['g'].init_hidden(1)
     num_feats = dataloader.get_num_song_features()
@@ -341,8 +343,6 @@ def main(args):
             freeze_d = False
             if trn_acc >= 95.0:
                 freeze_d = True
-
-        # sampling (to check if generator really learns)
 
     if not args.no_save_g:
         torch.save(model['g'].state_dict(), os.path.join(CKPT_DIR, G_FN))
