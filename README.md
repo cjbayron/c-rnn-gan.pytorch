@@ -34,3 +34,8 @@ This project is licensed under the Apache License, Version 2.0 - see the [LICENS
 * "No wasted midi" - fix batches
 * SGD w/ decay
 * Min-max all features then use sigmoid
+
+
+## Overfit Test
+
+Trial 1: default params, feature_matching, label smoothing, 100 epochs
