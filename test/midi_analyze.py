@@ -132,6 +132,11 @@ def analyze_tick():
     print(np.mean(l), np.std(l))
     tick_list = np.array(tick_list)
     print(np.mean(tick_list), np.std(tick_list))
+    print(min(tick_list), max(tick_list))
+
+    plt.hist(tick_list[tick_list < 500], bins=100)
+    plt.show()
+
     tick_list = (tick_list - np.mean(tick_list)) / np.std(tick_list)
     print(min(tick_list), max(tick_list))
 
@@ -158,6 +163,11 @@ def analyze_tick_len():
 
     tick_list = np.array(tick_list)
     print(np.mean(tick_list), np.std(tick_list))
+    print(min(tick_list), max(tick_list))
+
+    plt.hist(tick_list[tick_list < 400], bins=100)
+    plt.show()
+
     tick_list = (tick_list - np.mean(tick_list)) / np.std(tick_list)
     print(min(tick_list), max(tick_list))
 
@@ -202,6 +212,6 @@ if __name__ == "__main__":
     # check_avg_tick_interval_2()
     # generate_copies()
     # check_avg_tick_interval_all()
-    # analyze_tick()
-    # analyze_tick_len()
-    analyze_note()
+    analyze_tick()
+    analyze_tick_len()
+    # analyze_note()

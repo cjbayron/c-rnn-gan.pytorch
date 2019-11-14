@@ -322,7 +322,7 @@ class MusicDataLoader(object):
   def rewind(self, part='train'):
     self.pointer[part] = 0
 
-  def get_batch(self, batchsize, songlength, part='train'):
+  def get_batch(self, batchsize, songlength, part='train', normalize=True):
     """
       get_batch() returns a batch from self.songs, as a
       pair of tensors (genrecomposer, song_data).
@@ -419,10 +419,11 @@ class MusicDataLoader(object):
         batch_songs[s,:,:] = songmatrix
 
       # input normalization
-      norm_std(batch_songs, TICKS_FROM_PREV_START)
-      norm_std(batch_songs, LENGTH)
-      norm_std(batch_songs, VELOCITY)
-      norm_minmax(batch_songs, TONE)
+      if normalize:
+        norm_std(batch_songs, TICKS_FROM_PREV_START)
+        norm_std(batch_songs, LENGTH)
+        norm_std(batch_songs, VELOCITY)
+        norm_minmax(batch_songs, TONE)
 
       return batch_genrecomposer, batch_songs
 
@@ -434,7 +435,7 @@ class MusicDataLoader(object):
   def get_num_meta_features(self):
     return len(self.genres)+len(self.composers)
 
-  def get_midi_pattern(self, song_data, bpm):
+  def get_midi_pattern(self, song_data, bpm, normalized=True):
     """
     get_midi_pattern takes a song in internal representation 
     (a tensor of dimensions [songlength, self.num_song_features]).
@@ -504,10 +505,11 @@ class MusicDataLoader(object):
       song_data = np.array(song_data)
 
     # de-normalize
-    de_norm_std(song_data, TICKS_FROM_PREV_START)
-    de_norm_std(song_data, LENGTH)
-    de_norm_std(song_data, VELOCITY)
-    de_norm_minmax(song_data, TONE)
+    if normalized:
+      de_norm_std(song_data, TICKS_FROM_PREV_START)
+      de_norm_std(song_data, LENGTH)
+      de_norm_std(song_data, VELOCITY)
+      de_norm_minmax(song_data, TONE)
 
     for frame in song_data:
       abs_tick_note_beginning += int(round(frame[TICKS_FROM_PREV_START]))
