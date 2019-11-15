@@ -17,7 +17,7 @@ This runs for 200 epochs, after which you should get something similar to this:
 When fed with MIDI data, training of this C-RNN-GAN implementation tends to be unstable. A lot of hyperparameter tweaking and training techniques such as freezing have been implemented, in which I managed to generate some convincing MIDI music, but not reproducible even while using the same set of hyperparameters and techniques. Nevertheless, I'll share these runs:
 
 ```
-$ python train.py --g_lrn_rate=0.0001 --d_lrn_rate=0.0004 --g_pretraining_epochs=10 --d_g_pretraining_epochs=10 --label_smoothing
+$ python train.py --g_lrn_rate=0.0001 --d_lrn_rate=0.0004 --g_pretraining_epochs=10 --d_pretraining_epochs=10 --label_smoothing 
 ```
 * Adam optimizer for both G and D, with learning rates 0.0001 and 0.0004, respectively
 * Pre-trains G and D independently for 10 epochs i.e. Train G for 10 epochs with D frozen & vice versa
