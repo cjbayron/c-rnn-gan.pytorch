@@ -29,33 +29,56 @@ import music_data_utils
 
 DATA_DIR = 'data'
 CKPT_DIR = 'models'
+COMPOSER = 'sonata-ish'
+
 G_FN = 'c_rnn_gan_g.pth'
 D_FN = 'c_rnn_gan_d.pth'
 
 G_LRN_RATE = 0.001
 D_LRN_RATE = 0.001
 MAX_GRAD_NORM = 5.0
+# following values are modified at runtime
+MAX_SEQ_LEN = 200
 BATCH_SIZE = 32
 
-COMPOSER = 'mozart'
-MAX_SEQ_LEN = 200
-
 EPSILON = 1e-40 # value to use to approximate zero (to prevent undefined results)
+
+class GLoss(nn.Module):
+    ''' C-RNN-GAN generator loss
+    '''
+    def __init__(self):
+        super(GLoss, self).__init__()
+
+    def forward(self, logits_gen):
+        logits_gen = torch.clamp(logits_gen, EPSILON, 1.0)
+        batch_loss = -torch.log(logits_gen)
+
+        return torch.mean(batch_loss)
+
 
 class DLoss(nn.Module):
     ''' C-RNN-GAN discriminator loss
     '''
-    def __init__(self):
+    def __init__(self, label_smoothing=False):
         super(DLoss, self).__init__()
+        self.label_smoothing = label_smoothing
 
     def forward(self, logits_real, logits_gen):
         ''' Discriminator loss
 
         logits_real: logits from D, when input is real
         logits_gen: logits from D, when input is from Generator
+
+        loss = -(ylog(p) + (1-y)log(1-p))
+
         '''
         logits_real = torch.clamp(logits_real, EPSILON, 1.0)
         d_loss_real = -torch.log(logits_real)
+
+        if self.label_smoothing:
+            p_fake = torch.clamp((1 - logits_real), EPSILON, 1.0)
+            d_loss_fake = -torch.log(p_fake)
+            d_loss_real = 0.9*d_loss_real + 0.1*d_loss_fake
 
         logits_gen = torch.clamp((1 - logits_gen), EPSILON, 1.0)
         d_loss_gen = -torch.log(logits_gen)
@@ -68,7 +91,6 @@ def run_training(model, optimizer, criterion, dataloader, freeze_g=False, freeze
     ''' Run single training epoch
     '''
     
-
     num_feats = dataloader.get_num_song_features()
     dataloader.rewind(part='train')
     batch_meta, batch_song = dataloader.get_batch(BATCH_SIZE, MAX_SEQ_LEN, part='train')
@@ -102,11 +124,17 @@ def run_training(model, optimizer, criterion, dataloader, freeze_g=False, freeze
 
         # feed inputs to generator
         g_feats, _ = model['g'](z, g_states)
-        # feed real and generated input to discriminator
-        _, d_feats_real, _ = model['d'](batch_song, d_state)
-        _, d_feats_gen, _ = model['d'](g_feats, d_state)
+
         # calculate loss, backprop, and update weights of G
-        loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
+        if isinstance(criterion['g'], GLoss):
+            d_logits_gen, _, _ = model['d'](g_feats, d_state)
+            loss['g'] = criterion['g'](d_logits_gen)
+        else: # feature matching
+            # feed real and generated input to discriminator
+            _, d_feats_real, _ = model['d'](batch_song, d_state)
+            _, d_feats_gen, _ = model['d'](g_feats, d_state)
+            loss['g'] = criterion['g'](d_feats_real, d_feats_gen)
+
         if not freeze_g:
             loss['g'].backward()
             nn.utils.clip_grad_norm_(model['g'].parameters(), max_norm=MAX_GRAD_NORM)
@@ -178,7 +206,11 @@ def run_validation(model, criterion, dataloader):
         d_logits_real, d_feats_real, _ = model['d'](batch_song, d_state)
         d_logits_gen, d_feats_gen, _ = model['d'](g_feats, d_state)
         # calculate loss
-        g_loss = criterion['g'](d_feats_real, d_feats_gen)
+        if isinstance(criterion['g'], GLoss):
+            g_loss = criterion['g'](d_logits_gen)
+        else: # feature matching
+            g_loss = criterion['g'](d_feats_real, d_feats_gen)
+
         d_loss = criterion['d'](d_logits_real, d_logits_gen)
 
         g_loss_total += g_loss.item()
@@ -209,16 +241,38 @@ def run_epoch(model, optimizer, criterion, dataloader, ep, num_ep,
     val_g_loss, val_d_loss, val_acc = run_validation(model, criterion, dataloader)
 
     if pretraining:
-        print("Pretraining Epoch %d/%d" % (ep+1, num_ep))
+        print("Pretraining Epoch %d/%d " % (ep+1, num_ep), "[Freeze G: ", freeze_g, ", Freeze D: ", freeze_d, "]")
     else:
-        print("Epoch %d/%d" % (ep+1, num_ep))
+        print("Epoch %d/%d " % (ep+1, num_ep), "[Freeze G: ", freeze_g, ", Freeze D: ", freeze_d, "]")
 
     print("\t[Training] G_loss: %0.8f, D_loss: %0.8f, D_acc: %0.2f\n"
           "\t[Validation] G_loss: %0.8f, D_loss: %0.8f, D_acc: %0.2f" %
           (trn_g_loss, trn_d_loss, trn_acc,
            val_g_loss, val_d_loss, val_acc))
 
-    return model
+    # -- DEBUG --
+    # This is for monitoring the current output from generator
+    # generate from model then save to MIDI file
+    g_states = model['g'].init_hidden(1)
+    num_feats = dataloader.get_num_song_features()
+    z = torch.empty([1, MAX_SEQ_LEN, num_feats]).uniform_() # random vector
+    if torch.cuda.is_available():
+        z = z.cuda()
+        model['g'].cuda()
+
+    model['g'].eval()
+    g_feats, _ = model['g'](z, g_states)
+    song_data = g_feats.squeeze().cpu()
+    song_data = song_data.detach().numpy()
+
+    if (ep+1) == num_ep:
+        midi_data = dataloader.save_data('sample.mid', song_data)
+    else:
+        midi_data = dataloader.save_data(None, song_data)
+        print(midi_data[0][:16])
+    # -- DEBUG --
+
+    return model, trn_acc
 
 
 def main(args):
@@ -239,14 +293,20 @@ def main(args):
         'd': Discriminator(num_feats, use_cuda=train_on_gpu)
     }
 
-    optimizer = {
-        'g': optim.Adam(model['g'].parameters(), G_LRN_RATE),
-        'd': optim.Adam(model['d'].parameters(), D_LRN_RATE)
-    }
+    if args.use_sgd:
+        optimizer = {
+            'g': optim.SGD(model['g'].parameters(), lr=args.g_lrn_rate, momentum=0.9),
+            'd': optim.SGD(model['d'].parameters(), lr=args.d_lrn_rate, momentum=0.9)
+        }
+    else:
+        optimizer = {
+            'g': optim.Adam(model['g'].parameters(), args.g_lrn_rate),
+            'd': optim.Adam(model['d'].parameters(), args.d_lrn_rate)
+        }
 
     criterion = {
-        'g': nn.MSELoss(reduction='sum'), # feature matching
-        'd': DLoss()
+        'g': nn.MSELoss(reduction='sum') if args.feature_matching else GLoss(),
+        'd': DLoss(args.label_smoothing)
     }
 
     if args.load_g:
@@ -264,18 +324,25 @@ def main(args):
         model['d'].cuda()
 
     if not args.no_pretraining:
-        for ep in range(args.pretraining_epochs):
-            model = run_epoch(model, optimizer, criterion, dataloader,
-                              ep, args.pretraining_epochs, freeze_g=True, pretraining=True)
+        for ep in range(args.d_pretraining_epochs):
+            model, _ = run_epoch(model, optimizer, criterion, dataloader,
+                              ep, args.d_pretraining_epochs, freeze_g=True, pretraining=True)
 
-        for ep in range(args.pretraining_epochs):
-            model = run_epoch(model, optimizer, criterion, dataloader,
-                              ep, args.pretraining_epochs, freeze_d=True, pretraining=True)
+        for ep in range(args.g_pretraining_epochs):
+            model, _ = run_epoch(model, optimizer, criterion, dataloader,
+                              ep, args.g_pretraining_epochs, freeze_d=True, pretraining=True)
 
+    freeze_d = False
     for ep in range(args.num_epochs):
-        model = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs)        
+        # if ep % args.freeze_d_every == 0:
+        #     freeze_d = not freeze_d
 
-        # sampling (to check if generator really learns)
+        model, trn_acc = run_epoch(model, optimizer, criterion, dataloader, ep, args.num_epochs, freeze_d=freeze_d)
+        if args.conditional_freezing:
+            # conditional freezing
+            freeze_d = False
+            if trn_acc >= 95.0:
+                freeze_d = True
 
     if not args.no_save_g:
         torch.save(model['g'].state_dict(), os.path.join(CKPT_DIR, G_FN))
@@ -293,12 +360,21 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--load_d', action='store_true')
     ARG_PARSER.add_argument('--no_save_g', action='store_true')
     ARG_PARSER.add_argument('--no_save_d', action='store_true')
+
     ARG_PARSER.add_argument('--num_epochs', default=300, type=int)
     ARG_PARSER.add_argument('--seq_len', default=256, type=int)
-    ARG_PARSER.add_argument('--batch_size', default=32, type=int)
+    ARG_PARSER.add_argument('--batch_size', default=16, type=int)
+    ARG_PARSER.add_argument('--g_lrn_rate', default=0.001, type=float)
+    ARG_PARSER.add_argument('--d_lrn_rate', default=0.001, type=float)
 
     ARG_PARSER.add_argument('--no_pretraining', action='store_true')
-    ARG_PARSER.add_argument('--pretraining_epochs', default=10, type=int)
+    ARG_PARSER.add_argument('--g_pretraining_epochs', default=5, type=int)
+    ARG_PARSER.add_argument('--d_pretraining_epochs', default=5, type=int)
+    # ARG_PARSER.add_argument('--freeze_d_every', default=5, type=int)
+    ARG_PARSER.add_argument('--use_sgd', action='store_true')
+    ARG_PARSER.add_argument('--conditional_freezing', action='store_true')
+    ARG_PARSER.add_argument('--label_smoothing', action='store_true')
+    ARG_PARSER.add_argument('--feature_matching', action='store_true')
 
     ARGS = ARG_PARSER.parse_args()
     MAX_SEQ_LEN = ARGS.seq_len
