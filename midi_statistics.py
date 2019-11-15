@@ -439,7 +439,7 @@ def get_all_stats(midi_pattern):
   stats['intensity_span'] = max_int-min_int
 
   stats['polyphony_score'] = get_polyphony_score(midi_pattern)
-  stats['top_10_intervals'] = get_top_k_intervals(midi_pattern, 10)
+  stats['top_10_intervals'] = get_top_k_intervals(midi_pattern, 10) # NOT melodic interval, tick interval
   stats['top_2_interval_difference'] = 0.0
   if len(stats['top_10_intervals']) > 1:
     stats['top_2_interval_difference'] = abs(stats['top_10_intervals'][1][0]-stats['top_10_intervals'][0][0])
@@ -492,7 +492,7 @@ def main():
         print ('Max tone: {}, {:.1f} Hz.'.format(tone_to_tone_name(stats['tone_max']), stats['freq_max']))
         print ('Span: {} tones, {:.1f} Hz.'.format(stats['tone_span'], stats['freq_span']))
         print ('Unique tones: {}'.format(stats['tones_unique']))
-        for r in xrange(2,10):
+        for r in range(2,10):
           print('Repetitions of len {}: {}'.format(r, stats['repetitions_{}'.format(r)]))
         print('Estimated beat: {}. Avg ticks off: {:.2f}.'.format(stats['estimated_beat'], stats['estimated_beat_avg_ticks_off']))
         print('Intensity: min: {}, max: {}.'.format(stats['intensity_min'], stats['intensity_max']))

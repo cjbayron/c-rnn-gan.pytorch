@@ -25,7 +25,7 @@ import music_data_utils
 
 CKPT_DIR = 'models'
 G_FN = 'c_rnn_gan_g.pth'
-MAX_SEQ_LEN = 1000
+MAX_SEQ_LEN = 256
 FILENAME = 'sample.mid'
 
 def generate():

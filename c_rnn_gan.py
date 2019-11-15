@@ -67,6 +67,7 @@ class Generator(nn.Module):
             h1 = self.dropout(h1) # feature dropout only (no recurrent dropout)
             h2, c2 = self.lstm_cell2(h1, state2)
             prev_gen = self.fc_layer2(h2)
+            # prev_gen = F.relu(self.fc_layer2(h2)) #DEBUG
             gen_feats.append(prev_gen)
 
             state1 = (h1, c1)
