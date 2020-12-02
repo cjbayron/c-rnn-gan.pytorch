@@ -403,7 +403,7 @@ if __name__ == "__main__":
     ARG_PARSER.add_argument('--no_save_d', action='store_true')
     ARG_PARSER.add_argument('--freeze_g', action='store_true')
     ARG_PARSER.add_argument('--freeze_d', action='store_true')
-    ARG_PARSER.add_argument('--num_epochs', default=20, type=int)
+    ARG_PARSER.add_argument('--num_epochs', default=200, type=int)
     ARG_PARSER.add_argument('--seq_len', default=8, type=int)
     ARG_PARSER.add_argument('--batch_size', default=32, type=int)
 

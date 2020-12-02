@@ -1,5 +1,8 @@
 # Tools to load and save midi files for the rnn-gan-project.
 # 
+# This file has been modified by Christopher John Bayron to support
+# operations in c-rnn-gan.pytorch project. 
+#
 # Written by Olof Mogren, http://mogren.one/
 #
 # This file has been modified by Christopher John Bayron to support
