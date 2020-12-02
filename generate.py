@@ -38,7 +38,11 @@ def generate():
     use_gpu = torch.cuda.is_available()
     g_model = Generator(num_feats, use_cuda=use_gpu)
 
-    ckpt = torch.load(os.path.join(CKPT_DIR, G_FN))
+    if not use_gpu:
+        ckpt = torch.load(os.path.join(CKPT_DIR, G_FN), map_location='cpu')
+    else:
+        ckpt = torch.load(os.path.join(CKPT_DIR, G_FN))
+        
     g_model.load_state_dict(ckpt)
 
     # generate from model then save to MIDI file
