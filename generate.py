@@ -18,6 +18,8 @@
 #     https://github.com/olofmogren/c-rnn-gan
 
 import os
+from argparse import ArgumentParser
+import numpy as np
 import torch
 
 from c_rnn_gan import Generator
@@ -28,7 +30,7 @@ G_FN = 'c_rnn_gan_g.pth'
 MAX_SEQ_LEN = 256
 FILENAME = 'sample.mid'
 
-def generate():
+def generate(n):
     ''' Sample MIDI from trained generator model
     '''
     # prepare model
@@ -42,7 +44,7 @@ def generate():
         ckpt = torch.load(os.path.join(CKPT_DIR, G_FN), map_location='cpu')
     else:
         ckpt = torch.load(os.path.join(CKPT_DIR, G_FN))
-        
+
     g_model.load_state_dict(ckpt)
 
     # generate from model then save to MIDI file
@@ -53,13 +55,29 @@ def generate():
         g_model.cuda()
 
     g_model.eval()
-    g_feats, _ = g_model(z, g_states)
-    song_data = g_feats.squeeze().cpu()
-    song_data = song_data.detach().numpy()
+
+    full_song_data = []
+    for i in range(n):
+        g_feats, g_states = g_model(z, g_states)
+        song_data = g_feats.squeeze().cpu()
+        song_data = song_data.detach().numpy() 
+        full_song_data.append(song_data)
+
+    if len(full_song_data) > 1:
+        full_song_data = np.concatenate(full_song_data, axis=0)
+    else:
+        full_song_data = full_song_data[0]
 
     dataloader.save_data(FILENAME, song_data)
+    print('Full sequence shape: ', full_song_data.shape)
     print('Generated {}'.format(FILENAME))
 
 
 if __name__ == "__main__":
-    generate()
+    ARG_PARSER = ArgumentParser()
+    # number of times to execute generator model;
+    # all generated data are concatenated to form a single longer sequence
+    ARG_PARSER.add_argument('-n', default=1, type=int)
+    ARGS = ARG_PARSER.parse_args()
+
+    generate(ARGS.n)
