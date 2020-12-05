@@ -68,7 +68,7 @@ def generate(n):
     else:
         full_song_data = full_song_data[0]
 
-    dataloader.save_data(FILENAME, song_data)
+    dataloader.save_data(FILENAME, full_song_data)
     print('Full sequence shape: ', full_song_data.shape)
     print('Generated {}'.format(FILENAME))
 
